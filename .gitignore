@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# учебный полигон, склонированный отдельно (yugoru/aiqa-triage)
+project/aiqa-triage/
