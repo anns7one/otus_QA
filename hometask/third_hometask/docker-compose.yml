@@ -1,0 +1,22 @@
+# ДЗ №3: "Ollama в Docker-контейнере для генерации API-автотестов"
+#
+# Запуск:   docker compose up -d
+# Остановка: docker compose down
+#
+# Проверка: curl http://localhost:11435/api/tags
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-hw3
+
+    ports:
+      - "11435:11434"
+
+    volumes:
+      - ollama-models:/root/.ollama
+
+    restart: unless-stopped
+
+volumes:
+  ollama-models:
