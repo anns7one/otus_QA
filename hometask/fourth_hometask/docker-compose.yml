@@ -1,0 +1,22 @@
+# Ollama в Docker-контейнере для RAG-генерации
+#
+#Запуск: docker compose up -d
+#Остановка: docker compose down
+#
+# Проверка: curl https://localhost:11436/api/tags
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-hm4
+
+    ports:
+      - "11436:11434"
+
+    volumes:
+      - ollama-models-hw4:/root/.ollama
+
+    restart: unless-stopped
+
+volumes:
+  ollama-models-hw4:
