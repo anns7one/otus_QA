@@ -10,7 +10,7 @@ Isolation, Least Privilege, Input Guard и Output Guard). Цель — прак�
 Tool Abuse, RAG Poisoning, Encoding, Jailbreak), задокументировать их,
 построить защищённую версию и автоматизировать повторную проверку.
 
-Подробный разбор — в [`REPORT.md`](REPORT.md).
+Подробный разбор в [`REPORT.md`](REPORT.md).
 
 ## Требования
 
@@ -49,7 +49,7 @@ pytest tests/ -v
 ```
 
 19 payload'ов (6 классов атак + benign-контроль) против `secured`. Отчёт
-pass/fail — [`tests/security_test_report.md`](tests/security_test_report.md).
+pass/fail  [`tests/security_test_report.md`](tests/security_test_report.md).
 
 ## Структура файлов
 
