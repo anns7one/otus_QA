@@ -1,0 +1,12 @@
+[
+    {"id": "REQ-01", "text": "GET /posts возвращает 200 и массив из 100 объектов Post (userId, id, title, body)", "priority": "High", "method": "GET", "path": "/posts", "status": 200, "rationale": "основная операция чтения, на контракт опираются все потребители"},
+    {"id": "REQ-02", "text": "GET /posts/{id} для существующего поста возвращает 200 и один объект Post", "priority": "High", "method": "GET", "path": "/posts/{id}", "status": 200, "rationale": "основной сценарий чтения по идентификатору"},
+    {"id": "REQ-03", "text": "GET /posts/{id} для несуществующего поста возвращает 404", "priority": "Medium", "method": "GET", "path": "/posts/{id}", "status": 404, "rationale": "негативный сценарий, важен, но реже задевает пользователя"},
+    {"id": "REQ-04", "text": "GET /posts?userId=1 возвращает 200 и 10 постов пользователя", "priority": "Medium", "method": "GET", "path": "/posts", "status": 200, "params": ["userId"], "rationale": "фильтрация, частая, но не базовая операция"},
+    {"id": "REQ-05", "text": "GET /posts/{id}/comments возвращает 200 и 5 объектов Comment", "priority": "Medium", "method": "GET", "path": "/posts/{id}/comments", "status": 200, "rationale": "вложенный ресурс"},
+    {"id": "REQ-06", "text": "POST /posts возвращает 201, поле id и переданные title, body, userId без изменений", "priority": "High", "method": "POST", "path": "/posts", "status": 201, "rationale": "основной путь записи"},
+    {"id": "REQ-07", "text": "PUT /posts/{id} возвращает 200 и обновлённый объект", "priority": "Medium", "method": "PUT", "path": "/posts/{id}", "status": 200, "rationale": "полное обновление"},
+    {"id": "REQ-08", "text": "PATCH /posts/{id} возвращает 200 и объект с применённым изменением", "priority": "Low", "method": "PATCH", "path": "/posts/{id}", "status": 200, "rationale": "частичное обновление, используется редко"},
+    {"id": "REQ-09", "text": "DELETE /posts/{id} возвращает 200 и пустой объект {} (не 204)", "priority": "Medium", "method": "DELETE", "path": "/posts/{id}", "status": 200, "rationale": "в спецификации отмечено как типичная ошибка: ожидают 204"},
+    {"id": "REQ-10", "text": "GET /users возвращает 200 и 10 пользователей", "priority": "Low", "method": "GET", "path": "/users", "status": 200, "rationale": "справочный ресурс, не в основном сценарии"}
+  ]  
