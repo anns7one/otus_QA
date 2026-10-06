@@ -14,7 +14,7 @@
     },
     "duplicate_tests": [
       {"tests": ["test_create_post_returns_201_and_echoes_body", "test_create_post_returns_201_again"], "type": "exact"},
-      {"tests": ["test_get_post_comments_returns_5_items", "test_comments_of_first_post"], "type": "near"},
+      {"tests": ["test_get_post_comments_returns_5_items", "test_comments_of_first_post"], "type": "exact"},
       {"tests": ["test_get_posts_list_returns_100_items", "test_get_all_posts_count"], "type": "near"}
     ],
     "not_duplicates": [
