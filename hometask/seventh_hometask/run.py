@@ -1,7 +1,7 @@
 """Прогоняет все 4 типа документов через Ollama.
 
 Пишет:
-- <artifact_type>_results.md в корне папки на каждый тип документа отдельно
+- results/latest/<artifact_type>_results.md на каждый тип документа отдельно
   (test_case_results.md, checklist_results.md, test_plan_results.md,
   qa_report_results.md) — имя файла сразу говорит, что внутри, и это
   последний прогон. Это и есть "результаты тестирования" для сдачи.
@@ -17,7 +17,9 @@ from pathlib import Path
 from prompt_generator import generate_all_prompts, load_requirement
 from evaluator import evaluate_prompt, CRITERIA
 
-HISTORY_DIR = Path("results") / "history"
+RESULTS_DIR = Path("results")
+LATEST_DIR = RESULTS_DIR / "latest"
+HISTORY_DIR = RESULTS_DIR / "history"
 _RUN_FOLDER_RE = re.compile(r"^(\d+)-progon$")
 
 
@@ -58,9 +60,10 @@ def render_one(artifact_type: str, prompt: str, result: dict) -> str:
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
+    LATEST_DIR.mkdir(parents=True, exist_ok=True)
     HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
-    requirement_path = "requirement.md"
+    requirement_path = "input/requirement.md"
     req = load_requirement(requirement_path)
     prompts = generate_all_prompts(requirement_path)
 
@@ -70,7 +73,7 @@ def main():
         results[artifact_type] = evaluate_prompt(artifact_type, prompt, req)
 
     for artifact_type, result in results.items():
-        Path(f"{artifact_type}_results.md").write_text(
+        (LATEST_DIR / f"{artifact_type}_results.md").write_text(
             render_one(artifact_type, prompts[artifact_type], result), encoding="utf-8"
         )
 
@@ -87,7 +90,7 @@ def main():
         json.dumps(scores_only, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    print("Готово: " + ", ".join(f"{t}_results.md" for t in results))
+    print("Готово: " + ", ".join(f"results/latest/{t}_results.md" for t in results))
     print(f"В архив: results/history/{run_number:02d}-progon/")
 
 

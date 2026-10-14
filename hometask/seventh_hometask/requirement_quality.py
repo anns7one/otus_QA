@@ -1,13 +1,4 @@
-"""Оценка качества самого требования (не сгенерированного документа) по
-характеристикам хорошего требования (EPAM, «Тестирование ПО. Базовый курс»,
-разд. 2.2).
-
-ponytail: из исходного списка EPAM выброшены 2 характеристики —
-«проранжированность по важности/стабильности/срочности» (бессмысленна без
-явных меток приоритета в requirement.md — их там нет, добавить вместе с
-критерием, если в requirement.md появятся приоритеты) и «последовательность»
-(граница термина не восстановилась при копировании текста — см.
-knowledge/summaries/epam-bazovyi-kurs-kachestvo-trebovaniy.md в вики-базе).
+"""Оценка качества самого требования
 """
 import sys
 from pathlib import Path
@@ -65,17 +56,21 @@ def render(requirement_text: str, scores: dict) -> str:
     return "\n".join(lines)
 
 
+LATEST_DIR = Path("results") / "latest"
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
-    requirement_text = load_requirement("requirement.md")
+    requirement_text = load_requirement("input/requirement.md")
     try:
         scores = score_requirement(requirement_text)
     except JudgeParseError as exc:
         scores = {"error": str(exc)}
-    Path("requirement_quality_results.md").write_text(
+    LATEST_DIR.mkdir(parents=True, exist_ok=True)
+    (LATEST_DIR / "requirement_quality_results.md").write_text(
         render(requirement_text, scores), encoding="utf-8"
     )
-    print("Готово: requirement_quality_results.md")
+    print("Готово: results/latest/requirement_quality_results.md")
 
 
 if __name__ == "__main__":
