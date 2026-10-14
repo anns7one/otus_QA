@@ -1,0 +1,17 @@
+# Ollama в Docker для генерации и оценки тестовой документации
+#
+# Запуск: docker compose up -d
+# Проверка: curl http://localhost:11437/api/tags
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-hm7
+    ports:
+      - "11437:11434"
+    volumes:
+      - ollama-models-hw7:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  ollama-models-hw7:
