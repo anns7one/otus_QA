@@ -1,0 +1,17 @@
+# Ollama в Docker для автотестов на галлюцинации/согласованность/API
+#
+# Запуск: docker compose up -d
+# Загрузка модели: docker exec ollama-hm8 ollama pull llama3
+# Проверка: curl http://localhost:11438/api/tags
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-hm8
+    restart: unless-stopped
+    ports:
+      - "11438:11434"
+    volumes:
+      - ollama-models-hm9:/root/.ollama
+    
+volumes:
+  ollama-models-hm9:
