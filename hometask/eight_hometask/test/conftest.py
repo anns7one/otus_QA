@@ -1,7 +1,7 @@
 import pytest
 import requests
 
-BASE_URL = "https://localhost:11438"
+BASE_URL = "http://localhost:11438"
 MODEL = "llama3"
 
 @pytest.fixture(scope="session")
