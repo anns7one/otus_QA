@@ -8,6 +8,7 @@ import requests
 
 BASE_URL = "http://localhost:11400"
 MODEL = "qwen2.5:7b"
+MAX_TOKENS = 1500
 PROJECT_DIR = Path(__file__).parent
 
 
@@ -65,7 +66,7 @@ def chat(prompt, schema=None, temperature=0.2, seed=42):
         "model": MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
-        "options": {"temperature": temperature, "seed": seed},
+        "options": {"temperature": temperature, "seed": seed, "num_predict": MAX_TOKENS},
     }
     if schema:
         payload["format"] = schema
