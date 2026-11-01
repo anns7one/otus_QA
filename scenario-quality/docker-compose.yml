@@ -1,0 +1,11 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: scenario-quality-ollama
+    ports:
+      - "127.0.0.1:11400:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+
+volumes:
+  ollama-models:
