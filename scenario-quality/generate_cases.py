@@ -1,10 +1,13 @@
 import json
 import re
+import hashlib
 
 from ollama_client import PROJECT_DIR, chat, prepare_ollama
 
 REQUIREMENT_PATH = PROJECT_DIR / "input" / "requirement.md"
 OUTPUT_PATH = PROJECT_DIR / "output" / "test_cases.json"
+REVIEW_PATH = PROJECT_DIR / "output" / "requirement_review.json"
+REVIEW_COMMAND = "python analyze_requirement.py review"
 MAX_ATTEMPTS = 3
 BASE_SEED = 42
 TEXT_FIELDS = ["title", "description", "expected_result"]
@@ -157,6 +160,19 @@ def ask_valid(prompt, schema, validate, temperature=0.2):
     raise RuntimeError(f"Модель не дала корректный ответ за {MAX_ATTEMPTS} попытки")
 
 
+def fingerprint(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def check_review(requirement):
+    if not REVIEW_PATH.exists():
+        raise SystemExit(f"Требование не проверено. Запусти: {REVIEW_COMMAND}")
+    review = json.loads(REVIEW_PATH.read_text(encoding="utf-8"))
+    if review.get("requirement_sha256") != fingerprint(requirement):
+        raise SystemExit(f"Требование изменилось после проверки. Запусти: {REVIEW_COMMAND}")
+    return review
+
+
 def suite_coverage(cases, requirement):
     required = {(field, check) for field in input_fields(requirement) for check in CHECKS}
     covered = {(case["field"], case["check"]) for case in cases}
@@ -208,10 +224,13 @@ def generate_cases(requirement, free_count=6):
 
 
 if __name__ == "__main__":
-    prepare_ollama()
     requirement = REQUIREMENT_PATH.read_text(encoding="utf-8")
+    review = check_review(requirement)
+    print(f"Требование проверено: {review['status']}, принятых рисков {len(review['accepted_risks'])}")
+    prepare_ollama()
     cases = generate_cases(requirement)
     OUTPUT_PATH.parent.mkdir(exist_ok=True)
     OUTPUT_PATH.write_text(json.dumps(cases, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Сохранено кейсов: {len(cases)} → {OUTPUT_PATH}")
     print("Покрытие обязательных проверок:", suite_coverage(cases, requirement))
+

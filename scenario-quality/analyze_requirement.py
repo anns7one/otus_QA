@@ -2,6 +2,7 @@ import argparse
 import json
 import re
 from datetime import datetime
+from generate_cases import REVIEW_PATH, ask_valid, fingerpri
 
 from generate_cases import ask_valid
 from ollama_client import PROJECT_DIR, prepare_ollama
@@ -10,7 +11,6 @@ GOLDEN_DIR = PROJECT_DIR / "data" / "analyzer_golden"
 REQUIREMENT_PATH = PROJECT_DIR / "input" / "requirement.md"
 OUTPUT_DIR = PROJECT_DIR / "output"
 PROGRESS_PATH = OUTPUT_DIR / "analyzer_progress.jsonl"
-REVIEW_PATH = OUTPUT_DIR / "requirement_review.json"
 CURRENT_PROMPT = "v1"
 SECURITY_DEFECT_IDS = {"security", "malicious-file"}
 ACCEPT_COMMAND = "принять"
@@ -256,11 +256,9 @@ def evaluate(version, split="dev"):
     return record
 
 
-def save_review(status, findings):
+def save_review(status, findings, requirement):
     OUTPUT_DIR.mkdir(exist_ok=True)
-    review = {"status": status, "accepted_risks": findings}
-    REVIEW_PATH.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Статус требования: {status} → {REVIEW_PATH}")
+    review = {"status": status, "requirement_sha256": fingerprint(requirement), "accepted_risks": findings}
 
 
 def review():
@@ -269,7 +267,7 @@ def review():
         requirement = REQUIREMENT_PATH.read_text(encoding="utf-8")
         findings, _, _ = analyze(requirement)
         if not findings:
-            save_review("passed", [])
+            save_review("passed", [], requirement)
             return
         for number, finding in enumerate(findings, start=1):
             print(f"\n{number}. [{finding['criterion']}] {finding['quote']}")
@@ -278,7 +276,7 @@ def review():
 
         answer = input(f"\nВведите уточнение к требованию или «{ACCEPT_COMMAND}», чтобы принять риски: ").strip()
         if answer.lower() == ACCEPT_COMMAND:
-            save_review("accepted_risks", findings)
+            save_review("accepted_risks", findings, requirement)
             return
         if answer:
             with REQUIREMENT_PATH.open("a", encoding="utf-8") as file:
