@@ -12,8 +12,7 @@ OUTPUT_DIR = PROJECT_DIR / "output"
 PROGRESS_PATH = OUTPUT_DIR / "analyzer_progress.jsonl"
 REVIEW_PATH = OUTPUT_DIR / "requirement_review.json"
 CURRENT_PROMPT = "v1"
-SECURITY_WORDS = r"xss|инъекц|вредонос|скрипт"
-MANDATORY = "обязательная проверка"
+SECURITY_DEFECT_IDS = {"security", "malicious-file"}
 ACCEPT_COMMAND = "принять"
 
 FINDINGS_SCHEMA = {
@@ -34,6 +33,22 @@ FINDINGS_SCHEMA = {
         }
     },
     "required": ["findings"],
+}
+
+SECURITY_SCHEMA = {
+    "type": "object",
+    "properties": {"has_rules": {"type": "boolean"}, "quote": {"type": "string"}},
+    "required": ["has_rules", "quote"],
+}
+
+SECURITY_FINDING_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "criterion": {"type": "string"},
+        "problem": {"type": "string"},
+        "question": {"type": "string"},
+    },
+    "required": ["criterion", "problem", "question"],
 }
 
 FORMAT = """
@@ -87,8 +102,33 @@ def build_prompt(requirement, version):
 {FORMAT}"""
 
 
+NARROW_CHECKS = {
+    "vague": "размытые слова и оценки без числа или точного значения (например «оперативно», «значительный», «по возможности»), которые нельзя проверить тестом",
+    "outcome": "действия пользователя и входные данные, для которых не описан результат: неверное или несуществующее значение, недопустимое сочетание значений, пустой результат, отказ или сбой системы",
+    "contradiction": "пункты требования, которые противоречат друг другу; в quote процитируй один из пунктов, в problem назови оба",
+    "alternatives": "пункты, где результат описан несколькими вариантами на выбор («или», «в зависимости от»), поэтому ожидаемый результат теста нельзя записать однозначно",
+}
+
+
+def build_narrow_prompt(requirement, description):
+    return f"""Ты QA lead. Проверь требование только на один тип проблем.
+
+Требование:
+{requirement}
+
+Тип проблем: {description}.
+Если таких проблем нет, верни пустой список findings.
+{FORMAT}"""
+
+
 def normalize(text):
-    return " ".join(text.split()).lower()
+    return " ".join(re.sub(r"[*`]", "", text).split()).lower()
+
+
+def quote_in_requirement(quote, allowed):
+    parts = [normalize(part).strip(' .`*-"') for part in re.split(r'\n|"\s*и\s*"', quote)]
+    parts = [part for part in parts if part]
+    return bool(parts) and all(part in allowed for part in parts)
 
 
 def clean_findings(findings, requirement):
@@ -97,9 +137,8 @@ def clean_findings(findings, requirement):
     kept = []
     bad_quotes = duplicates = 0
     for finding in findings:
-        quote = normalize(finding["quote"]).strip(" .`*-")
         question = normalize(finding["question"])
-        if not quote or quote not in allowed:
+        if not quote_in_requirement(finding["quote"], allowed):
             bad_quotes += 1
         elif question in seen_questions:
             duplicates += 1
@@ -109,21 +148,52 @@ def clean_findings(findings, requirement):
     return kept, bad_quotes, duplicates
 
 
-def mandatory_findings(requirement):
-    if re.search(SECURITY_WORDS, normalize(requirement)):
+def build_security_prompt(requirement):
+    return f"""Ты специалист по безопасности веб-приложений.
+
+Требование:
+{requirement}
+
+Есть ли в требовании явные правила обработки вредоносного ввода: XSS, SQL-инъекции, HTML и скрипты в полях, проверка содержимого загружаемых файлов?
+Если есть, верни has_rules true и в quote дословную цитату пункта с этим правилом.
+Если нет, верни has_rules false и пустой quote.
+Обычная валидация формата (длина, маска, допустимые символы) не считается правилом безопасности."""
+
+
+def build_security_findings_prompt(requirement):
+    return f"""Ты специалист по безопасности веб-приложений.
+
+Требование:
+{requirement}
+
+В требовании нет правил обработки вредоносного ввода ни для одного поля.
+Напиши ОДНУ общую находку на всё требование:
+- criterion: критерий;
+- problem: какой вредоносный ввод (XSS, SQL-инъекции) не описан, перечисли все поля ввода и загрузки файлов, для которых это опасно, и чем это грозит;
+- question: один конкретный вопрос автору требования.
+Пиши только на русском языке."""
+
+
+def validate_security_finding(data):
+    if not data["problem"].strip() or not data["question"].strip():
+        raise ValueError("пустая проблема или вопрос в находке безопасности")
+
+
+def security_findings(requirement):
+    decision = ask_valid(build_security_prompt(requirement), SECURITY_SCHEMA, lambda _: None, temperature=0)
+    quote = normalize(decision["quote"]).strip(" .`*-")
+    if decision["has_rules"] and quote and quote in normalize(requirement):
         return []
-    return [{
-        "criterion": MANDATORY,
-        "quote": "",
-        "problem": "В требовании нет правил для вредоносного ввода",
-        "question": "Как система должна обрабатывать XSS и SQL-инъекции в полях ввода?",
-    }]
+    finding = ask_valid(build_security_findings_prompt(requirement), SECURITY_FINDING_SCHEMA, validate_security_finding, temperature=0)
+    return [{**finding, "quote": "", "check": "security"}]
 
 
 def analyze(requirement, version=CURRENT_PROMPT):
-    data = ask_valid(build_prompt(requirement, version), FINDINGS_SCHEMA, lambda _: None, temperature=0)
-    findings, bad_quotes, duplicates = clean_findings(data["findings"], requirement)
-    return findings + mandatory_findings(requirement), bad_quotes, duplicates
+    raw = ask_valid(build_prompt(requirement, version), FINDINGS_SCHEMA, lambda _: None, temperature=0)["findings"]
+    for description in NARROW_CHECKS.values():
+        raw += ask_valid(build_narrow_prompt(requirement, description), FINDINGS_SCHEMA, lambda _: None, temperature=0)["findings"]
+    findings, bad_quotes, duplicates = clean_findings(raw, requirement)
+    return findings + security_findings(requirement), bad_quotes, duplicates
 
 
 def matches(finding, defect):
@@ -136,7 +206,8 @@ def evaluate(version, split="dev"):
     selected = {req_id: item for req_id, item in golden.items() if item["split"] == split}
     all_findings = {}
     missed = []
-    found = total = findings_total = findings_matched = bad_quotes_total = duplicates_total = llm_found = 0
+    found = total = findings_total = findings_matched = bad_quotes_total = duplicates_total = 0
+    security_gaps = security_hits = security_false_alarms = 0
 
     for req_id, item in selected.items():
         requirement = (GOLDEN_DIR / f"{req_id}.md").read_text(encoding="utf-8")
@@ -148,20 +219,27 @@ def evaluate(version, split="dev"):
         findings_matched += sum(any(matches(f, d) for d in item["defects"]) for f in findings)
         hits = [d["id"] for d in item["defects"] if any(matches(f, d) for f in findings)]
         found += len(hits)
-        llm_only = [f for f in findings if f["criterion"] != MANDATORY]
-        llm_found += sum(any(matches(f, d) for f in llm_only) for d in item["defects"])
+        has_gap = any(d["id"] in SECURITY_DEFECT_IDS for d in item["defects"])
+        flagged = any(f.get("check") == "security" for f in findings)
+        security_gaps += has_gap
+        security_hits += has_gap and flagged
+        security_false_alarms += flagged and not has_gap
         total += len(item["defects"])
         missed += [f"{req_id}:{d['id']}" for d in item["defects"] if d["id"] not in hits]
-        print(f"{req_id}: найдено дефектов {len(hits)}/{len(item['defects'])}, находок {len(findings)}, неверных цитат {bad_quotes}, дублей {duplicates}")
+        title = requirement.splitlines()[0].split(" - ", 1)[-1].strip()
+        print(f"{req_id} ({title}): найдено дефектов {len(hits)}/{len(item['defects'])}, находок {len(findings)}, неверных цитат {bad_quotes}, дублей {duplicates}")
 
     record = {
         "date": datetime.now().isoformat(timespec="seconds"),
         "prompt": version,
+        "narrow_checks": list(NARROW_CHECKS),
         "split": split,
         "defects_found": found,
         "defects_total": total,
         "recall": round(found / total, 3),
-        "recall_llm_only": round(llm_found / total, 3),
+        "security_found": security_hits,
+        "security_gaps": security_gaps,
+        "security_false_alarms": security_false_alarms,
         "findings": findings_total,
         "findings_matched": findings_matched,
         "bad_quotes": bad_quotes_total,
@@ -174,6 +252,7 @@ def evaluate(version, split="dev"):
     findings_path = OUTPUT_DIR / f"analyzer_findings_{version}.json"
     findings_path.write_text(json.dumps(all_findings, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Recall {record['recall']:.0%} ({found}/{total}), находок {findings_total}, совпали с дефектами {findings_matched}")
+    print(f"Безопасность: найдено {security_hits}/{security_gaps}, ложных тревог {security_false_alarms}")
     return record
 
 

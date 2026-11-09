@@ -8,7 +8,7 @@ OUTPUT_PATH = PROJECT_DIR / "output" / "test_cases.json"
 MAX_ATTEMPTS = 3
 BASE_SEED = 42
 TEXT_FIELDS = ["title", "description", "expected_result"]
-LIST_FIELDS = ["preconditions", "steps", "boundary_values"]
+LIST_FIELDS = ["preconditions", "steps"]
 FOREIGN_CHARS = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]")
 QUOTED = re.compile(r"[«'\"“]([^«»'\"“”]{3,})[»'\"”]")
 PLACEHOLDER = "[текст не указан в требовании]"
@@ -39,9 +39,16 @@ CASE_SCHEMA = {
         "preconditions": STRING_LIST,
         "steps": STRING_LIST,
         "expected_result": {"type": "string"},
-        "boundary_values": STRING_LIST,
+        "boundary_values": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"value": {"type": "string"}, "expected": {"type": "string"}},
+                "required": ["value", "expected"],
+            },
+        },
     },
-    "required": TEXT_FIELDS + LIST_FIELDS,
+    "required": TEXT_FIELDS + LIST_FIELDS + ["boundary_values"],
 }
 
 
@@ -89,11 +96,13 @@ def build_case_prompt(requirement, title):
 - preconditions: условия перед началом теста;
 - steps: действия для одной проверки, все остальные поля заполнены допустимыми данными;
 - expected_result: наблюдаемый результат одной проверки;
-- boundary_values: только значения того поля, которое проверяет этот тест, и поведение на каждом.
+- boundary_values: проверяемые значения только того поля, которое проверяет этот тест; value — конкретное значение, которое вводит тестировщик, expected — ожидаемый результат для этого значения.
 
 Как записывать boundary_values при числовом диапазоне: значение на единицу меньше минимума, минимум, максимум, значение на единицу больше максимума.
-Пример для другого поля «Возраст» с диапазоном от 18 до 65: "17 — ошибка", "18 — принимается", "65 — принимается", "66 — ошибка".
+Пример для другого поля «Возраст» с диапазоном от 18 до 65:
+[{{"value": "17", "expected": "ошибка"}}, {{"value": "18", "expected": "принимается"}}, {{"value": "65", "expected": "принимается"}}, {{"value": "66", "expected": "ошибка"}}]
 Если числовых границ нет, укажи пограничные случаи этого поля: пустое значение, неверный формат.
+Значение из шагов теста должно быть в boundary_values.
 
 Ограничения:
 - пиши только на русском языке;
@@ -116,6 +125,11 @@ def validate_case(case, check=None):
     for field in LIST_FIELDS:
         if not case[field] or not all(item.strip() for item in case[field]):
             raise ValueError(f"пустой список или элемент в поле {field}")
+    if not case["boundary_values"]:
+        raise ValueError("пустой список boundary_values")
+    for item in case["boundary_values"]:
+        if not item["expected"].strip():
+            raise ValueError("пустой expected в boundary_values")
     if FOREIGN_CHARS.search(json.dumps(case, ensure_ascii=False)):
         raise ValueError("в тексте есть символы другого языка")
     if check in SECURITY_VALUES and not any(SECURITY_VALUES[check] in step for step in case["steps"]):
@@ -184,6 +198,11 @@ def generate_cases(requirement, free_count=6):
             case["expected_result"] = SECURITY_EXPECTED
         else:
             case["expected_result"] = remove_invented_quotes(case["expected_result"], requirement)
+        for item in case["boundary_values"]:
+            if check in SECURITY_VALUES and SECURITY_VALUES[check] in item["value"]:
+                item["expected"] = SECURITY_EXPECTED
+            else:
+                item["expected"] = remove_invented_quotes(item["expected"], requirement)
         cases.append({"id": f"TC-{len(cases) + 1:03d}", "field": field, "check": check, **case})
     return cases
 
