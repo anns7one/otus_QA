@@ -2,9 +2,7 @@ import argparse
 import json
 import re
 from datetime import datetime
-from generate_cases import REVIEW_PATH, ask_valid, fingerpri
-
-from generate_cases import ask_valid
+from generate_cases import INPUT_FIELD, REVIEW_PATH, ask_valid, fingerprint
 from ollama_client import PROJECT_DIR, prepare_ollama
 
 GOLDEN_DIR = PROJECT_DIR / "data" / "analyzer_golden"
@@ -14,6 +12,16 @@ PROGRESS_PATH = OUTPUT_DIR / "analyzer_progress.jsonl"
 CURRENT_PROMPT = "v1"
 SECURITY_DEFECT_IDS = {"security", "malicious-file"}
 ACCEPT_COMMAND = "принять"
+CHECK_TITLES = {
+    "general": "Общий анализ",
+    "vague": "Размытые формулировки",
+    "outcome": "Не описан результат",
+    "contradiction": "Противоречия",
+    "alternatives": "Несколько вариантов результата",
+    "security": "Безопасность",
+}
+OTHER_FIELD = "Поведение и общие пункты"
+ALL_FIELDS = "Все поля"
 
 FINDINGS_SCHEMA = {
     "type": "object",
@@ -189,9 +197,11 @@ def security_findings(requirement):
 
 
 def analyze(requirement, version=CURRENT_PROMPT):
-    raw = ask_valid(build_prompt(requirement, version), FINDINGS_SCHEMA, lambda _: None, temperature=0)["findings"]
-    for description in NARROW_CHECKS.values():
-        raw += ask_valid(build_narrow_prompt(requirement, description), FINDINGS_SCHEMA, lambda _: None, temperature=0)["findings"]
+    data = ask_valid(build_prompt(requirement, version), FINDINGS_SCHEMA, lambda _: None, temperature=0)
+    raw = [{**finding, "check": "general"} for finding in data["findings"]]
+    for check, description in NARROW_CHECKS.items():
+        data = ask_valid(build_narrow_prompt(requirement, description), FINDINGS_SCHEMA, lambda _: None, temperature=0)
+        raw += [{**finding, "check": check} for finding in data["findings"]]
     findings, bad_quotes, duplicates = clean_findings(raw, requirement)
     return findings + security_findings(requirement), bad_quotes, duplicates
 
@@ -256,9 +266,59 @@ def evaluate(version, split="dev"):
     return record
 
 
+def field_items(requirement):
+    items = []
+    for line in requirement.splitlines():
+        match = INPUT_FIELD.match(line)
+        if match:
+            items.append([match.group(1), line])
+        elif items and line.startswith("  "):
+            items[-1][1] += " " + line
+    return [(name, normalize(text)) for name, text in items]
+
+
+def first_quote_part(finding):
+    return normalize(re.split(r'\n|"\s*и\s*"', finding["quote"])[0]).strip(' .`*-"')
+
+
+def field_of(finding, requirement):
+    if not finding["quote"].strip():
+        return ALL_FIELDS
+    first = first_quote_part(finding)
+    names = [name for name, text in field_items(requirement) if first in text]
+    return names[0] if len(names) == 1 else OTHER_FIELD
+
+
+def sort_findings(findings, requirement):
+    fields = [name for name, _ in field_items(requirement)]
+    position = {name: index for index, name in enumerate(fields + [OTHER_FIELD, ALL_FIELDS])}
+    checks = list(CHECK_TITLES)
+    text = normalize(requirement)
+    for finding in findings:
+        finding["field"] = field_of(finding, requirement)
+    return sorted(findings, key=lambda finding: (
+        position[finding["field"]],
+        text.find(first_quote_part(finding)),
+        checks.index(finding["check"]),
+    ))
+
+
+def print_findings(findings):
+    field = None
+    for number, finding in enumerate(findings, start=1):
+        if finding["field"] != field:
+            field = finding["field"]
+            print(f"\n=== {field} ===")
+        print(f"{number}. [{CHECK_TITLES[finding['check']]}] {finding['quote']}")
+        print(f"   Проблема: {finding['problem']}")
+        print(f"   Вопрос: {finding['question']}")
+
+
 def save_review(status, findings, requirement):
     OUTPUT_DIR.mkdir(exist_ok=True)
     review = {"status": status, "requirement_sha256": fingerprint(requirement), "accepted_risks": findings}
+    REVIEW_PATH.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Статус требования: {status} → {REVIEW_PATH}")
 
 
 def review():
@@ -269,10 +329,8 @@ def review():
         if not findings:
             save_review("passed", [], requirement)
             return
-        for number, finding in enumerate(findings, start=1):
-            print(f"\n{number}. [{finding['criterion']}] {finding['quote']}")
-            print(f"   Проблема: {finding['problem']}")
-            print(f"   Вопрос: {finding['question']}")
+        findings = sort_findings(findings, requirement)
+        print_findings(findings)
 
         answer = input(f"\nВведите уточнение к требованию или «{ACCEPT_COMMAND}», чтобы принять риски: ").strip()
         if answer.lower() == ACCEPT_COMMAND:
