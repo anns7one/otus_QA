@@ -83,4 +83,5 @@ def test_markdown_report_format(tmp_path, monkeypatch):
     assert text.startswith("# Отчёт о тестировании сценариев\n")
     assert "- Успешные: 1" in text and "- Неуспешные: 1" in text
     assert "](plots/scores.png)" in text
+    assert "## Список сценариев\n\n| Описание | Качество | Оценка |" in text
     assert "| TC-001 a \\| b | Высокое | 0.90 |" in text
