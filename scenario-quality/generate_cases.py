@@ -27,6 +27,7 @@ CHECKS = {
     "xss": f"ввод {SECURITY_VALUES['xss']}",
     "sql": f"ввод {SECURITY_VALUES['sql']}",
 }
+MASK_LENGTH_CHECK = "ввод на одну цифру больше, чем вмещает маска"
 
 CHAR_CLASSES = {
     "кириллица": r"[а-яёА-ЯЁ]",
@@ -51,11 +52,21 @@ OUTCOME_TEXT = {
 DESCRIBED_LENGTH = re.compile(r"^строка из (\d+) символ")
 
 STRING_LIST = {"type": "array", "items": {"type": "string"}}
-OUTLINE_SCHEMA = {
-    "type": "object",
-    "properties": {"titles": STRING_LIST},
-    "required": ["titles"],
-}
+FORM = "форма"
+FORMAT_RULE, OTHER_RULE = "формат значения", "другое правило"
+
+
+def outline_schema(fields):
+    item = {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string"},
+            "field": {"type": "string", "enum": fields + [FORM]},
+            "rule": {"type": "string", "enum": [FORMAT_RULE, OTHER_RULE]},
+        },
+        "required": ["title", "field", "rule"],
+    }
+    return {"type": "object", "properties": {"cases": {"type": "array", "items": item}}, "required": ["cases"]}
 
 CASE_SCHEMA = {
     "type": "object",
@@ -193,7 +204,10 @@ def value_outcome(value, rules):
         prefix = re.sub(r"\D", "", rules["mask"].split("(")[0])
         if digits.startswith(prefix):
             digits = digits[len(prefix):]
-        return ACCEPTED if len(digits) == rules["mask"].count(".") else REJECTED
+        slots = rules["mask"].count(".")
+        if len(digits) > slots:
+            return NOT_DEFINED
+        return ACCEPTED if len(digits) == slots else REJECTED
     if described:
         length = int(described.group(1))
         if not rules["max_length"] and length > max(rules["min_length"], 1):
@@ -253,7 +267,7 @@ def apply_rules(case, rules, format_only):
             fixes += 1
     steps = " ".join(case["steps"])
     tested = next((item for item in case["boundary_values"] if item["value"].strip() and item["value"] in steps), None)
-    if tested is None and len(case["boundary_values"]) == 1:
+    if tested is None and case["boundary_values"] and (format_only or len(case["boundary_values"]) == 1):
         tested = case["boundary_values"][0]
     if tested:
         computed = corrected_outcome(tested["value"], case["expected_result"], rules, format_only)
@@ -271,7 +285,11 @@ def build_outline_prompt(requirement, count, existing):
 Техника: применяй классы эквивалентности и анализ граничных значений.
 Включи позитивные, негативные и граничные проверки.
 
-Формат: в поле titles верни ровно {count} разных коротких названий тест-кейсов.
+Формат: в поле cases верни ровно {count} разных тест-кейсов. Для каждого:
+- title: короткое название;
+- field: поле, которое проверяет кейс, или «{FORM}», если кейс проверяет форму целиком;
+- rule: «{FORMAT_RULE}», если кейс проверяет только допустимость введённого значения (длина, символы, маска);
+  «{OTHER_RULE}», если результат зависит от другого: уникальность, чекбокс, поведение формы.
 Правила:
 - каждое название описывает одну проверку одного правила;
 - названия не повторяют одну и ту же проверку другими словами;
@@ -312,11 +330,11 @@ def build_case_prompt(requirement, title):
 - не придумывай правил, которых нет в требовании;
 - текст сообщения в кавычках пиши только дословно из требования; если в требовании текста нет, пиши «появляется сообщение об ошибке» без кавычек и без своего текста;
 - если требование не задаёт поведение для этой проверки, в expected_result напиши ровно: {UNDEFINED};
-- длинные значения не печатай целиком, пиши описанием: «строка из 51 символа»."""
+- значение длиннее 30 символов пиши только описанием «строка из N символов» и не приводи к нему пример."""
 
 
 def validate_outline(data, count):
-    titles = [title.strip() for title in data["titles"] if title.strip()]
+    titles = [item["title"].strip() for item in data["cases"] if item["title"].strip()]
     if len(set(titles)) < count:
         raise ValueError(f"нужно {count} разных названий, получено {len(set(titles))}")
 
@@ -388,22 +406,32 @@ def suite_coverage(cases, requirement):
     }
 
 
+def check_description(check, description, rules):
+    if check == "длина" and rules and rules["mask"]:
+        return MASK_LENGTH_CHECK
+    return description
+
+
 def generate_cases(requirement, field_rules, free_count=6):
+    fields = input_fields(requirement)
     plan = [
-        (field, check, f"{field}: {description}")
-        for field in input_fields(requirement)
+        (field, check, f"{field}: {check_description(check, description, field_rules.get(field))}", True)
+        for field in fields
         for check, description in CHECKS.items()
     ]
     outline = ask_valid(
-        build_outline_prompt(requirement, free_count, [title for _, _, title in plan]),
-        OUTLINE_SCHEMA,
+        build_outline_prompt(requirement, free_count, [title for _, _, title, _ in plan]),
+        outline_schema(fields),
         lambda data: validate_outline(data, free_count),
     )
-    titles = list(dict.fromkeys(title.strip() for title in outline["titles"] if title.strip()))[:free_count]
-    plan += [(None, None, title) for title in titles]
+    unique = {item["title"].strip(): item for item in outline["cases"] if item["title"].strip()}
+    plan += [
+        (item["field"] if item["field"] in fields else None, None, title, item["rule"] == FORMAT_RULE)
+        for title, item in list(unique.items())[:free_count]
+    ]
 
     cases = []
-    for number, (field, check, title) in enumerate(plan, start=1):
+    for number, (field, check, title, format_only) in enumerate(plan, start=1):
         print(f"[{number}/{len(plan)}] {title}")
         try:
             case = ask_valid(
@@ -423,11 +451,14 @@ def generate_cases(requirement, field_rules, free_count=6):
                 item["expected"] = SECURITY_EXPECTED
             else:
                 item["expected"] = remove_invented_quotes(item["expected"], requirement)
-        rules = field_rules.get(field or title.split(":")[0].strip())
-        fixes = apply_rules(case, rules, format_only=check is not None) if rules else 0
+        rules = field_rules.get(field)
+        fixes = apply_rules(case, rules, format_only) if rules else 0
         if fixes:
             print(f"  исправлено по правилам поля: {fixes}")
-        cases.append({"id": f"TC-{len(cases) + 1:03d}", "field": field, "check": check, "rule_fixes": fixes, **case})
+        cases.append({
+            "id": f"TC-{len(cases) + 1:03d}", "field": field, "check": check,
+            "format_check": format_only, "rule_fixes": fixes, **case,
+        })
     return cases
 
 

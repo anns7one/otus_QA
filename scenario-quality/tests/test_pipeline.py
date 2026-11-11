@@ -28,6 +28,7 @@ def test_value_outcome_follows_field_rules():
     assert value_outcome("строка из 1000 символов", EMAIL) == NOT_DEFINED
     assert value_outcome("+7(912)345-67-89", PHONE) == ACCEPTED
     assert value_outcome("+7(912)345-67", PHONE) == REJECTED
+    assert value_outcome("+7(912)345-67-891", PHONE) == NOT_DEFINED
 
 
 def test_apply_rules_does_not_accept_in_free_cases():

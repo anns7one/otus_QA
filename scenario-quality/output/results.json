@@ -2,16 +2,14 @@
   "generator_model": "qwen2.5:7b",
   "threshold": 0.35000000000000003,
   "summary": {
-    "total": 29,
-    "passed": 28,
-    "failed": 1
+    "total": 30,
+    "passed": 27,
+    "failed": 3
   },
   "suite_coverage": {
     "required": 24,
-    "covered": 23,
-    "missing": [
-      "Телефон: длина"
-    ]
+    "covered": 24,
+    "missing": []
   },
   "accepted_risks": 12,
   "scenarios": [
@@ -19,12 +17,12 @@
       "id": "TC-001",
       "title": "Имя: пробелы в начале, середине и конце значения",
       "metrics": {
-        "readability": 0.681,
-        "goal_clarity": 0.658,
-        "coverage": 0.378,
-        "consistency": 0.732
+        "readability": 0.683,
+        "goal_clarity": 0.688,
+        "coverage": 0.393,
+        "consistency": 0.755
       },
-      "score": 0.612,
+      "score": 0.63,
       "quality": "Среднее",
       "passed": true,
       "rule_fixes": 4
@@ -34,25 +32,25 @@
       "title": "Имя: значение кириллицей и значение латиницей",
       "metrics": {
         "readability": 0.561,
-        "goal_clarity": 0.499,
-        "coverage": 0.406,
-        "consistency": 0.429
+        "goal_clarity": 0.414,
+        "coverage": 0.34,
+        "consistency": 0.428
       },
-      "score": 0.474,
+      "score": 0.436,
       "quality": "Низкое",
-      "passed": true,
-      "rule_fixes": 3
+      "passed": false,
+      "rule_fixes": 2
     },
     {
       "id": "TC-003",
       "title": "Имя: значение со спецсимволами !@#$%^&*",
       "metrics": {
-        "readability": 0.747,
-        "goal_clarity": 0.714,
-        "coverage": 0.745,
-        "consistency": 0.778
+        "readability": 0.709,
+        "goal_clarity": 0.717,
+        "coverage": 0.797,
+        "consistency": 0.777
       },
-      "score": 0.746,
+      "score": 0.75,
       "quality": "Среднее",
       "passed": true,
       "rule_fixes": 0
@@ -61,12 +59,12 @@
       "id": "TC-004",
       "title": "Имя: очень длинное значение, строка из 1000 символов",
       "metrics": {
-        "readability": 0.87,
-        "goal_clarity": 0.769,
-        "coverage": 0.838,
-        "consistency": 0.768
+        "readability": 0.873,
+        "goal_clarity": 0.782,
+        "coverage": 0.804,
+        "consistency": 0.738
       },
-      "score": 0.811,
+      "score": 0.799,
       "quality": "Высокое",
       "passed": true,
       "rule_fixes": 0
@@ -75,13 +73,13 @@
       "id": "TC-005",
       "title": "Имя: ввод <script>alert(1)</script>",
       "metrics": {
-        "readability": 0.868,
-        "goal_clarity": 0.745,
-        "coverage": 0.685,
-        "consistency": 0.677
+        "readability": 0.82,
+        "goal_clarity": 0.779,
+        "coverage": 0.778,
+        "consistency": 0.664
       },
-      "score": 0.744,
-      "quality": "Среднее",
+      "score": 0.76,
+      "quality": "Высокое",
       "passed": true,
       "rule_fixes": 0
     },
@@ -89,12 +87,12 @@
       "id": "TC-006",
       "title": "Имя: ввод ' OR 1=1 --",
       "metrics": {
-        "readability": 0.889,
-        "goal_clarity": 0.712,
-        "coverage": 0.548,
-        "consistency": 0.593
+        "readability": 0.886,
+        "goal_clarity": 0.707,
+        "coverage": 0.552,
+        "consistency": 0.589
       },
-      "score": 0.686,
+      "score": 0.684,
       "quality": "Среднее",
       "passed": true,
       "rule_fixes": 0
@@ -103,12 +101,12 @@
       "id": "TC-007",
       "title": "E-mail: пробелы в начале, середине и конце значения",
       "metrics": {
-        "readability": 0.791,
-        "goal_clarity": 0.809,
-        "coverage": 0.83,
-        "consistency": 0.791
+        "readability": 0.78,
+        "goal_clarity": 0.751,
+        "coverage": 0.774,
+        "consistency": 0.805
       },
-      "score": 0.805,
+      "score": 0.777,
       "quality": "Высокое",
       "passed": true,
       "rule_fixes": 0
@@ -117,26 +115,26 @@
       "id": "TC-008",
       "title": "E-mail: значение кириллицей и значение латиницей",
       "metrics": {
-        "readability": 0.618,
-        "goal_clarity": 0.617,
-        "coverage": 0.606,
-        "consistency": 0.616
+        "readability": 0.806,
+        "goal_clarity": 0.811,
+        "coverage": 0.856,
+        "consistency": 0.852
       },
-      "score": 0.614,
-      "quality": "Среднее",
+      "score": 0.831,
+      "quality": "Высокое",
       "passed": true,
-      "rule_fixes": 1
+      "rule_fixes": 0
     },
     {
       "id": "TC-009",
       "title": "E-mail: значение со спецсимволами !@#$%^&*",
       "metrics": {
-        "readability": 0.613,
-        "goal_clarity": 0.532,
-        "coverage": 0.596,
-        "consistency": 0.726
+        "readability": 0.702,
+        "goal_clarity": 0.579,
+        "coverage": 0.68,
+        "consistency": 0.779
       },
-      "score": 0.617,
+      "score": 0.685,
       "quality": "Среднее",
       "passed": true,
       "rule_fixes": 0
@@ -145,12 +143,12 @@
       "id": "TC-010",
       "title": "E-mail: очень длинное значение, строка из 1000 символов",
       "metrics": {
-        "readability": 0.716,
-        "goal_clarity": 0.682,
-        "coverage": 0.647,
-        "consistency": 0.544
+        "readability": 0.738,
+        "goal_clarity": 0.74,
+        "coverage": 0.675,
+        "consistency": 0.578
       },
-      "score": 0.647,
+      "score": 0.683,
       "quality": "Среднее",
       "passed": true,
       "rule_fixes": 2
@@ -159,13 +157,13 @@
       "id": "TC-011",
       "title": "E-mail: ввод <script>alert(1)</script>",
       "metrics": {
-        "readability": 0.846,
-        "goal_clarity": 0.758,
-        "coverage": 0.785,
-        "consistency": 0.659
+        "readability": 0.863,
+        "goal_clarity": 0.746,
+        "coverage": 0.718,
+        "consistency": 0.599
       },
-      "score": 0.762,
-      "quality": "Высокое",
+      "score": 0.731,
+      "quality": "Среднее",
       "passed": true,
       "rule_fixes": 0
     },
@@ -173,12 +171,12 @@
       "id": "TC-012",
       "title": "E-mail: ввод ' OR 1=1 --",
       "metrics": {
-        "readability": 0.903,
-        "goal_clarity": 0.748,
-        "coverage": 0.667,
-        "consistency": 0.635
+        "readability": 0.898,
+        "goal_clarity": 0.741,
+        "coverage": 0.672,
+        "consistency": 0.622
       },
-      "score": 0.738,
+      "score": 0.733,
       "quality": "Среднее",
       "passed": true,
       "rule_fixes": 0
@@ -187,12 +185,12 @@
       "id": "TC-013",
       "title": "Телефон: пробелы в начале, середине и конце значения",
       "metrics": {
-        "readability": 0.923,
-        "goal_clarity": 0.767,
-        "coverage": 0.808,
-        "consistency": 0.819
+        "readability": 0.889,
+        "goal_clarity": 0.701,
+        "coverage": 0.825,
+        "consistency": 0.859
       },
-      "score": 0.829,
+      "score": 0.819,
       "quality": "Высокое",
       "passed": true,
       "rule_fixes": 0
@@ -201,223 +199,237 @@
       "id": "TC-014",
       "title": "Телефон: значение кириллицей и значение латиницей",
       "metrics": {
-        "readability": 0.674,
-        "goal_clarity": 0.609,
-        "coverage": 0.578,
-        "consistency": 0.592
+        "readability": 0.866,
+        "goal_clarity": 0.798,
+        "coverage": 0.838,
+        "consistency": 0.848
       },
-      "score": 0.613,
-      "quality": "Среднее",
+      "score": 0.838,
+      "quality": "Высокое",
       "passed": true,
-      "rule_fixes": 1
+      "rule_fixes": 0
     },
     {
       "id": "TC-015",
       "title": "Телефон: значение со спецсимволами !@#$%^&*",
       "metrics": {
-        "readability": 0.869,
-        "goal_clarity": 0.698,
-        "coverage": 0.826,
-        "consistency": 0.869
+        "readability": 0.871,
+        "goal_clarity": 0.677,
+        "coverage": 0.774,
+        "consistency": 0.846
       },
-      "score": 0.815,
+      "score": 0.792,
       "quality": "Высокое",
       "passed": true,
       "rule_fixes": 0
     },
     {
       "id": "TC-016",
-      "title": "Телефон: ввод <script>alert(1)</script>",
+      "title": "Телефон: ввод на одну цифру больше, чем вмещает маска",
       "metrics": {
-        "readability": 0.876,
-        "goal_clarity": 0.774,
-        "coverage": 0.695,
-        "consistency": 0.673
+        "readability": 0.802,
+        "goal_clarity": 0.643,
+        "coverage": 0.512,
+        "consistency": 0.473
       },
-      "score": 0.754,
-      "quality": "Высокое",
+      "score": 0.607,
+      "quality": "Среднее",
       "passed": true,
-      "rule_fixes": 0
+      "rule_fixes": 2
     },
     {
       "id": "TC-017",
-      "title": "Телефон: ввод ' OR 1=1 --",
+      "title": "Телефон: ввод <script>alert(1)</script>",
       "metrics": {
-        "readability": 0.92,
-        "goal_clarity": 0.777,
-        "coverage": 0.739,
-        "consistency": 0.72
+        "readability": 0.898,
+        "goal_clarity": 0.804,
+        "coverage": 0.798,
+        "consistency": 0.707
       },
-      "score": 0.789,
+      "score": 0.802,
       "quality": "Высокое",
       "passed": true,
       "rule_fixes": 0
     },
     {
       "id": "TC-018",
-      "title": "Пароль: пробелы в начале, середине и конце значения",
+      "title": "Телефон: ввод ' OR 1=1 --",
       "metrics": {
-        "readability": 0.682,
-        "goal_clarity": 0.708,
-        "coverage": 0.769,
-        "consistency": 0.821
+        "readability": 0.919,
+        "goal_clarity": 0.761,
+        "coverage": 0.67,
+        "consistency": 0.688
       },
-      "score": 0.745,
-      "quality": "Среднее",
-      "passed": true,
-      "rule_fixes": 4
-    },
-    {
-      "id": "TC-019",
-      "title": "Пароль: значение кириллицей и значение латиницей",
-      "metrics": {
-        "readability": 0.809,
-        "goal_clarity": 0.843,
-        "coverage": 0.785,
-        "consistency": 0.874
-      },
-      "score": 0.828,
-      "quality": "Высокое",
-      "passed": true,
-      "rule_fixes": 3
-    },
-    {
-      "id": "TC-020",
-      "title": "Пароль: значение со спецсимволами !@#$%^&*",
-      "metrics": {
-        "readability": 0.713,
-        "goal_clarity": 0.693,
-        "coverage": 0.686,
-        "consistency": 0.843
-      },
-      "score": 0.734,
-      "quality": "Среднее",
-      "passed": true,
-      "rule_fixes": 3
-    },
-    {
-      "id": "TC-021",
-      "title": "Пароль: очень длинное значение, строка из 1000 символов",
-      "metrics": {
-        "readability": 0.835,
-        "goal_clarity": 0.672,
-        "coverage": 0.729,
-        "consistency": 0.765
-      },
-      "score": 0.75,
+      "score": 0.76,
       "quality": "Высокое",
       "passed": true,
       "rule_fixes": 0
     },
     {
-      "id": "TC-022",
-      "title": "Пароль: ввод <script>alert(1)</script>",
+      "id": "TC-019",
+      "title": "Пароль: пробелы в начале, середине и конце значения",
       "metrics": {
-        "readability": 0.762,
-        "goal_clarity": 0.656,
-        "coverage": 0.546,
-        "consistency": 0.627
+        "readability": 0.857,
+        "goal_clarity": 0.768,
+        "coverage": 0.802,
+        "consistency": 0.808
       },
-      "score": 0.648,
-      "quality": "Среднее",
+      "score": 0.809,
+      "quality": "Высокое",
+      "passed": true,
+      "rule_fixes": 0
+    },
+    {
+      "id": "TC-020",
+      "title": "Пароль: значение кириллицей и значение латиницей",
+      "metrics": {
+        "readability": 0.841,
+        "goal_clarity": 0.768,
+        "coverage": 0.792,
+        "consistency": 0.842
+      },
+      "score": 0.811,
+      "quality": "Высокое",
+      "passed": true,
+      "rule_fixes": 1
+    },
+    {
+      "id": "TC-021",
+      "title": "Пароль: значение со спецсимволами !@#$%^&*",
+      "metrics": {
+        "readability": 0.739,
+        "goal_clarity": 0.716,
+        "coverage": 0.739,
+        "consistency": 0.816
+      },
+      "score": 0.752,
+      "quality": "Высокое",
+      "passed": true,
+      "rule_fixes": 2
+    },
+    {
+      "id": "TC-022",
+      "title": "Пароль: очень длинное значение, строка из 1000 символов",
+      "metrics": {
+        "readability": 0.807,
+        "goal_clarity": 0.76,
+        "coverage": 0.803,
+        "consistency": 0.826
+      },
+      "score": 0.799,
+      "quality": "Высокое",
       "passed": true,
       "rule_fixes": 0
     },
     {
       "id": "TC-023",
-      "title": "Пароль: ввод ' OR 1=1 --",
+      "title": "Пароль: ввод <script>alert(1)</script>",
       "metrics": {
-        "readability": 0.871,
-        "goal_clarity": 0.682,
-        "coverage": 0.526,
-        "consistency": 0.662
+        "readability": 0.831,
+        "goal_clarity": 0.718,
+        "coverage": 0.619,
+        "consistency": 0.657
       },
-      "score": 0.685,
+      "score": 0.706,
       "quality": "Среднее",
       "passed": true,
       "rule_fixes": 0
     },
     {
       "id": "TC-024",
-      "title": "Имя: минимальная длина (1 символ)",
+      "title": "Пароль: ввод ' OR 1=1 --",
       "metrics": {
-        "readability": 0.895,
-        "goal_clarity": 0.839,
-        "coverage": 0.827,
-        "consistency": 0.784
+        "readability": 0.868,
+        "goal_clarity": 0.738,
+        "coverage": 0.572,
+        "consistency": 0.661
       },
-      "score": 0.836,
-      "quality": "Высокое",
+      "score": 0.71,
+      "quality": "Среднее",
       "passed": true,
       "rule_fixes": 0
     },
     {
       "id": "TC-025",
-      "title": "E-mail: уникальность существующего адреса",
+      "title": "Имя: пустое поле",
       "metrics": {
-        "readability": 0.674,
-        "goal_clarity": 0.607,
-        "coverage": 0.693,
-        "consistency": 0.735
+        "readability": 0.926,
+        "goal_clarity": 0.837,
+        "coverage": 0.787,
+        "consistency": 0.687
       },
-      "score": 0.677,
-      "quality": "Среднее",
-      "passed": true,
-      "rule_fixes": 0
-    },
-    {
-      "id": "TC-026",
-      "title": "Телефон: корректный формат с автоматическим префиксом",
-      "metrics": {
-        "readability": 0.894,
-        "goal_clarity": 0.709,
-        "coverage": 0.652,
-        "consistency": 0.714
-      },
-      "score": 0.742,
-      "quality": "Среднее",
-      "passed": true,
-      "rule_fixes": 0
-    },
-    {
-      "id": "TC-027",
-      "title": "Пароль: минимальное количество символов и букв",
-      "metrics": {
-        "readability": 0.73,
-        "goal_clarity": 0.679,
-        "coverage": 0.687,
-        "consistency": 0.729
-      },
-      "score": 0.706,
-      "quality": "Среднее",
-      "passed": true,
-      "rule_fixes": 3
-    },
-    {
-      "id": "TC-028",
-      "title": "Согласие с политикой конфиденциальности: обязательность выбора",
-      "metrics": {
-        "readability": 0.856,
-        "goal_clarity": 0.821,
-        "coverage": 0.803,
-        "consistency": 0.758
-      },
-      "score": 0.81,
+      "score": 0.809,
       "quality": "Высокое",
       "passed": true,
       "rule_fixes": 0
     },
     {
-      "id": "TC-029",
-      "title": "Заполнение всех полей для успешной регистрации",
+      "id": "TC-026",
+      "title": "Пароль: отсутствие заглавной буквы и цифры",
       "metrics": {
-        "readability": 0.663,
-        "goal_clarity": 0.69,
-        "coverage": 0.313,
-        "consistency": 0.783
+        "readability": 0.889,
+        "goal_clarity": 0.767,
+        "coverage": 0.783,
+        "consistency": 0.809
       },
-      "score": 0.612,
+      "score": 0.812,
+      "quality": "Высокое",
+      "passed": true,
+      "rule_fixes": 0
+    },
+    {
+      "id": "TC-027",
+      "title": "E-mail: уникальность значения",
+      "metrics": {
+        "readability": 0.758,
+        "goal_clarity": 0.67,
+        "coverage": 0.615,
+        "consistency": 0.769
+      },
+      "score": 0.703,
       "quality": "Среднее",
+      "passed": true,
+      "rule_fixes": 0
+    },
+    {
+      "id": "TC-028",
+      "title": "Телефон: ввод корректного номера с автоматическим префиксом",
+      "metrics": {
+        "readability": 0.72,
+        "goal_clarity": 0.656,
+        "coverage": 0.486,
+        "consistency": 0.687
+      },
+      "score": 0.637,
+      "quality": "Среднее",
+      "passed": true,
+      "rule_fixes": 0
+    },
+    {
+      "id": "TC-029",
+      "title": "Имя: минимальная длина (8 символов)",
+      "metrics": {
+        "readability": 0.67,
+        "goal_clarity": 0.438,
+        "coverage": 0.111,
+        "consistency": 0.587
+      },
+      "score": 0.451,
+      "quality": "Низкое",
+      "passed": false,
+      "rule_fixes": 0
+    },
+    {
+      "id": "TC-030",
+      "title": "Согласие с политикой конфиденциальности: отмечен чекбокс",
+      "metrics": {
+        "readability": 0.676,
+        "goal_clarity": 0.502,
+        "coverage": 0.159,
+        "consistency": 0.632
+      },
+      "score": 0.492,
+      "quality": "Низкое",
       "passed": false,
       "rule_fixes": 0
     }
