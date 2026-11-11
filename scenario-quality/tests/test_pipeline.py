@@ -6,7 +6,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import report
-from generate_cases import ACCEPTED, NOT_DEFINED, REJECTED, apply_rules, check_review, value_outcome
+from generate_cases import ACCEPTED, NOT_DEFINED, REJECTED, apply_rules, check_review, stated_outcome, value_outcome
 from quality_model import QualityNet, split_by_requirement
 
 NAME = {"mandatory": True, "min_length": 1, "max_length": 50, "allowed": ["кириллица", "латиница строчная", "латиница заглавная", "дефис"],
@@ -29,6 +29,14 @@ def test_value_outcome_follows_field_rules():
     assert value_outcome("+7(912)345-67-89", PHONE) == ACCEPTED
     assert value_outcome("+7(912)345-67", PHONE) == REJECTED
     assert value_outcome("+7(912)345-67-891", PHONE) == NOT_DEFINED
+
+
+def test_stated_outcome_reads_model_wording():
+    assert stated_outcome("Значение невалидно") == REJECTED
+    assert stated_outcome("Ввод отклоняется") == REJECTED
+    assert stated_outcome("Кнопка неактивна") == REJECTED
+    assert stated_outcome("Поведение не задано требованием, нужно уточнение") == NOT_DEFINED
+    assert stated_outcome("Пользователь регистрируется") == ACCEPTED
 
 
 def test_apply_rules_does_not_accept_in_free_cases():

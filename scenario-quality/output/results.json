@@ -11,7 +11,7 @@
     "covered": 24,
     "missing": []
   },
-  "accepted_risks": 12,
+  "accepted_risks": 15,
   "scenarios": [
     {
       "id": "TC-001",

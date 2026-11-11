@@ -23,23 +23,24 @@ INK, INK_MUTED, SURFACE = "#0b0b0b", "#52514e", "#fcfcfb"
 SERIES = ["#2a78d6", "#eb6834"]
 
 
-def quality(score):
-    if score >= 0.75:
-        return "Высокое"
-    return "Среднее" if score >= 0.5 else "Низкое"
+def quality(score, passed):
+    if not passed:
+        return "Низкое"
+    return "Высокое" if score >= 0.75 else "Среднее"
 
 
 def build_results(cases, predictions, review, coverage, threshold):
     items = []
     for case, metrics in zip(cases, predictions):
         score = sum(metrics.values()) / len(metrics)
+        passed = all(value >= threshold for value in metrics.values())
         items.append({
             "id": case["id"],
             "title": case["title"],
             "metrics": {name: round(value, 3) for name, value in metrics.items()},
             "score": round(score, 3),
-            "quality": quality(score),
-            "passed": all(value >= threshold for value in metrics.values()),
+            "quality": quality(score, passed),
+            "passed": passed,
             "rule_fixes": case.get("rule_fixes", 0),
         })
     passed = sum(item["passed"] for item in items)

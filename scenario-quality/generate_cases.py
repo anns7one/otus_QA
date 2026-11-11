@@ -50,6 +50,7 @@ OUTCOME_TEXT = {
     NOT_DEFINED: UNDEFINED,
 }
 DESCRIBED_LENGTH = re.compile(r"^строка из (\d+) символ")
+REJECTION_STEMS = ["ошибк", "не прин", "не валид", "невалид", "отклон", "неактив", "не проход"]
 
 STRING_LIST = {"type": "array", "items": {"type": "string"}}
 FORM = "форма"
@@ -67,6 +68,7 @@ def outline_schema(fields):
         "required": ["title", "field", "rule"],
     }
     return {"type": "object", "properties": {"cases": {"type": "array", "items": item}}, "required": ["cases"]}
+
 
 CASE_SCHEMA = {
     "type": "object",
@@ -244,7 +246,7 @@ def stated_outcome(text):
     lowered = text.lower()
     if "не задан" in lowered or "уточнени" in lowered:
         return NOT_DEFINED
-    if "ошибк" in lowered or "не прин" in lowered or "не валид" in lowered:
+    if any(stem in lowered for stem in REJECTION_STEMS):
         return REJECTED
     return ACCEPTED
 
@@ -275,6 +277,7 @@ def apply_rules(case, rules, format_only):
             case["expected_result"] = OUTCOME_TEXT[computed]
             fixes += 1
     return fixes
+
 
 def build_outline_prompt(requirement, count, existing):
     return f"""Ты senior QA-инженер.

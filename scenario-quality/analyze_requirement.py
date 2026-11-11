@@ -14,12 +14,20 @@ SECURITY_DEFECT_IDS = {"security", "malicious-file"}
 ACCEPT_COMMANDS = ("принять", "нет")
 CONFIRM_YES = "да"
 CHECK_TITLES = {
-    "general": "Общий анализ",
-    "vague": "Размытые формулировки",
-    "outcome": "Не описан результат",
-    "contradiction": "Противоречия",
-    "alternatives": "Несколько вариантов результата",
-    "security": "Безопасность",
+    "general": "Общий анализ требования",
+    "vague": "Неизмеримая формулировка",
+    "outcome": "Не определён ожидаемый результат",
+    "contradiction": "Противоречие между пунктами",
+    "alternatives": "Неоднозначный ожидаемый результат",
+    "security": "Не определена обработка вредоносного ввода",
+}
+CRITERIA = ["однозначность", "полнота", "непротиворечивость", "проверяемость", "атомарность"]
+CHECK_CRITERION = {
+    "vague": "однозначность",
+    "outcome": "полнота",
+    "contradiction": "непротиворечивость",
+    "alternatives": "однозначность",
+    "security": "безопасность",
 }
 OTHER_FIELD = "Поведение и общие пункты"
 ALL_FIELDS = "Все поля"
@@ -32,7 +40,7 @@ FINDINGS_SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "criterion": {"type": "string"},
+                    "criterion": {"type": "string", "enum": CRITERIA},
                     "quote": {"type": "string"},
                     "problem": {"type": "string"},
                     "question": {"type": "string"},
@@ -53,15 +61,14 @@ SECURITY_SCHEMA = {
 SECURITY_FINDING_SCHEMA = {
     "type": "object",
     "properties": {
-        "criterion": {"type": "string"},
         "problem": {"type": "string"},
         "question": {"type": "string"},
     },
-    "required": ["criterion", "problem", "question"],
+    "required": ["problem", "question"],
 }
 
-FORMAT = """
-Формат: для каждой проблемы верни criterion (критерий), quote (дословная цитата пункта требования), problem (в чём проблема), question (конкретный вопрос автору требования).
+FORMAT = f"""
+Формат: для каждой проблемы верни criterion (критерий качества: {", ".join(CRITERIA)}), quote (дословная цитата пункта требования), problem (в чём проблема), question (конкретный вопрос автору требования).
 Пиши только на русском языке. Не придумывай правил, которых нет в требовании."""
 
 INSTRUCTIONS = {
@@ -177,7 +184,6 @@ def build_security_findings_prompt(requirement):
 
 В требовании нет правил обработки вредоносного ввода ни для одного поля.
 Напиши ОДНУ общую находку на всё требование:
-- criterion: критерий;
 - problem: какой вредоносный ввод (XSS, SQL-инъекции) не описан, перечисли все поля ввода и загрузки файлов, для которых это опасно, и чем это грозит;
 - question: один конкретный вопрос автору требования.
 Пиши только на русском языке."""
@@ -194,15 +200,21 @@ def security_findings(requirement):
     if decision["has_rules"] and quote and quote in normalize(requirement):
         return []
     finding = ask_valid(build_security_findings_prompt(requirement), SECURITY_FINDING_SCHEMA, validate_security_finding, temperature=0)
-    return [{**finding, "quote": "", "check": "security"}]
+    return [{**finding, "criterion": full_criterion(CHECK_CRITERION["security"], "security"), "quote": "", "check": "security"}]
+
+
+def full_criterion(attribute, check):
+    return f"{attribute.capitalize()}: {CHECK_TITLES[check][0].lower()}{CHECK_TITLES[check][1:]}"
 
 
 def analyze(requirement, version=CURRENT_PROMPT):
     data = ask_valid(build_prompt(requirement, version), FINDINGS_SCHEMA, lambda _: None, temperature=0)
-    raw = [{**finding, "check": "general"} for finding in data["findings"]]
+    raw = [{**finding, "criterion": full_criterion(finding["criterion"], "general"), "check": "general"}
+           for finding in data["findings"]]
     for check, description in NARROW_CHECKS.items():
         data = ask_valid(build_narrow_prompt(requirement, description), FINDINGS_SCHEMA, lambda _: None, temperature=0)
-        raw += [{**finding, "check": check} for finding in data["findings"]]
+        raw += [{**finding, "criterion": full_criterion(CHECK_CRITERION[check], check), "check": check}
+                for finding in data["findings"]]
     findings, bad_quotes, duplicates = clean_findings(raw, requirement)
     return findings + security_findings(requirement), bad_quotes, duplicates
 
@@ -310,7 +322,7 @@ def print_findings(findings):
         if finding["field"] != field:
             field = finding["field"]
             print(f"\n=== {field} ===")
-        print(f"{number}. [{CHECK_TITLES[finding['check']]}] {finding['quote']}")
+        print(f"{number}. [{finding['criterion']}] {finding['quote']}")
         print(f"   Проблема: {finding['problem']}")
         print(f"   Вопрос: {finding['question']}")
 

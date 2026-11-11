@@ -6,6 +6,7 @@ import torch
 from sentence_transformers import SentenceTransformer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, roc_auc_score
+from sklearn.model_selection import GroupKFold
 from torch import nn
 
 from build_dataset import METRICS, REQUIREMENTS_PATH, SCENARIOS_PATH, load_jsonl
@@ -19,6 +20,7 @@ SPLIT = (0.7, 0.15)
 THRESHOLDS = np.arange(0.05, 0.96, 0.05)
 MAX_EPOCHS = 300
 PATIENCE = 30
+CV_FOLDS = 5
 
 _encoder = None
 
@@ -141,42 +143,65 @@ def baselines(train, test, y_train, y_test, threshold):
     }
 
 
+def fit_and_score(x, y, scenarios, fit, val, test):
+    net, history = train_net(x[fit], y[fit], x[val], y[val])
+    with torch.no_grad():
+        threshold = choose_threshold(y[val].numpy(), torch.sigmoid(net(x[val])).numpy())
+        probabilities = torch.sigmoid(net(x[test])).numpy()
+    result = {
+        "model": scores(y[test].numpy(), probabilities, threshold),
+        **baselines([scenarios[i] for i in fit], [scenarios[i] for i in test], y[fit], y[test], threshold),
+    }
+    return net, history, threshold, result
+
+
+def cross_validate(x, y, scenarios, folds=CV_FOLDS):
+    groups = [item["requirement_id"] for item in scenarios]
+    runs = []
+    for fold, (train_index, test_index) in enumerate(GroupKFold(n_splits=folds).split(x, groups=groups), start=1):
+        train_ids = sorted({groups[i] for i in train_index})
+        random.Random(SEED + fold).shuffle(train_ids)
+        val_ids = set(train_ids[:max(1, round(len(train_ids) * SPLIT[1]))])
+        fit = [i for i in train_index if groups[i] not in val_ids]
+        val = [i for i in train_index if groups[i] in val_ids]
+        runs.append(fit_and_score(x, y, scenarios, fit, val, list(test_index))[3])
+    summary = {}
+    for name in runs[0]:
+        summary[name] = {}
+        for metric in METRICS:
+            aucs = [run[name][metric]["roc_auc"] for run in runs if run[name][metric]["roc_auc"] is not None]
+            f1s = [run[name][metric]["macro_f1"] for run in runs]
+            summary[name][metric] = {
+                "roc_auc_mean": float(np.mean(aucs)), "roc_auc_std": float(np.std(aucs)),
+                "macro_f1_mean": float(np.mean(f1s)), "macro_f1_std": float(np.std(f1s)),
+            }
+    return summary
+
+
 def train():
     scenarios = load_jsonl(SCENARIOS_PATH)
     requirement_texts = {item["id"]: item["text"] for item in json.loads(REQUIREMENTS_PATH.read_text(encoding="utf-8"))}
-    parts = split_by_requirement(scenarios)
-    print({name: len(items) for name, items in parts.items()})
-    x_train, y_train = dataset(parts["train"], requirement_texts)
-    x_val, y_val = dataset(parts["val"], requirement_texts)
-    x_test, y_test = dataset(parts["test"], requirement_texts)
-    net, history = train_net(x_train, y_train, x_val, y_val)
-    with torch.no_grad():
-        threshold = choose_threshold(y_val.numpy(), torch.sigmoid(net(x_val)).numpy())
-        probabilities = torch.sigmoid(net(x_test)).numpy()
+    x, y = dataset(scenarios, requirement_texts)
+    position = {id(item): index for index, item in enumerate(scenarios)}
+    parts = {name: [position[id(item)] for item in items] for name, items in split_by_requirement(scenarios).items()}
+    print({name: len(index) for name, index in parts.items()})
+    net, history, threshold, test = fit_and_score(x, y, scenarios, parts["train"], parts["val"], parts["test"])
     print(f"Порог, подобранный на validation: {threshold:.2f}")
+    print(f"Кросс-валидация по требованиям, {CV_FOLDS} разбиений:")
+    cross_validation = cross_validate(x, y, scenarios)
     report = {
-        "split": {name: sorted({item["requirement_id"] for item in items}) for name, items in parts.items()},
+        "split": {name: sorted({scenarios[i]["requirement_id"] for i in index}) for name, index in parts.items()},
         "threshold": threshold,
         "history": history,
-        "test": {
-            "model": scores(y_test.numpy(), probabilities, threshold),
-            **baselines(parts["train"], parts["test"], y_train, y_test, threshold),
-        },
+        "test": test,
+        "cross_validation": cross_validation,
     }
     MODEL_PATH.parent.mkdir(exist_ok=True)
-    torch.save({"state": net.state_dict(), "size": x_train.shape[1], "threshold": threshold}, MODEL_PATH)
+    torch.save({"state": net.state_dict(), "size": x.shape[1], "threshold": threshold}, MODEL_PATH)
     TRAINING_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    for name, result in report["test"].items():
-        print(name, {metric: (round(value["roc_auc"], 2), round(value["macro_f1"], 2)) for metric, value in result.items()})
+    for name, result in cross_validation.items():
+        print(name, {metric: f"{value['roc_auc_mean']:.2f}±{value['roc_auc_std']:.2f}" for metric, value in result.items()})
     return net, report
-
-
-def load_net():
-    saved = torch.load(MODEL_PATH)
-    net = QualityNet(saved["size"])
-    net.load_state_dict(saved["state"])
-    net.eval()
-    return net
 
 
 def predict(net, cases, requirement):
