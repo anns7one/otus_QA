@@ -28,12 +28,35 @@ CHECKS = {
     "sql": f"ввод {SECURITY_VALUES['sql']}",
 }
 
+CHAR_CLASSES = {
+    "кириллица": r"[а-яёА-ЯЁ]",
+    "латиница строчная": r"[a-z]",
+    "латиница заглавная": r"[A-Z]",
+    "цифры": r"\d",
+    "пробел": r" ",
+    "дефис": r"-",
+    "точка": r"\.",
+    "подчёркивание": r"_",
+    "знаки препинания": r"[.,;:!?\-()\"'«»]",
+}
+ANY_CHARS = "любые символы"
+TRIMMED, EDGE_ERROR, NOT_STATED = "обрезаются", "ошибка", "не сказано"
+EDGE_SPACES = [TRIMMED, EDGE_ERROR, NOT_STATED]
+ACCEPTED, REJECTED, NOT_DEFINED = "принимается", "ошибка", "не задано"
+OUTCOME_TEXT = {
+    ACCEPTED: "Значение принимается",
+    REJECTED: "Появляется сообщение об ошибке",
+    NOT_DEFINED: UNDEFINED,
+}
+DESCRIBED_LENGTH = re.compile(r"^строка из (\d+) символ")
+
 STRING_LIST = {"type": "array", "items": {"type": "string"}}
 OUTLINE_SCHEMA = {
     "type": "object",
     "properties": {"titles": STRING_LIST},
     "required": ["titles"],
 }
+
 CASE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -54,6 +77,32 @@ CASE_SCHEMA = {
     "required": TEXT_FIELDS + LIST_FIELDS + ["boundary_values"],
 }
 
+RULES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "min_length": {"type": "integer"},
+        "max_length": {"type": "integer"},
+        "allowed": {"type": "array", "items": {"type": "string", "enum": list(CHAR_CLASSES) + [ANY_CHARS]}},
+        "required": {"type": "array", "items": {"type": "string", "enum": list(CHAR_CLASSES)}},
+        "mandatory": {"type": "boolean"},
+        "edge_spaces": {"type": "string", "enum": EDGE_SPACES},
+        "max_middle_spaces": {"type": "integer"},
+        "exact_symbols": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"symbol": {"type": "string"}, "count": {"type": "integer"}},
+                "required": ["symbol", "count"],
+            },
+        },
+        "mask": {"type": "string"},
+    },
+    "required": [
+        "mandatory", "min_length", "max_length", "allowed", "required",
+        "edge_spaces", "max_middle_spaces", "exact_symbols", "mask",
+    ],
+}
+
 
 def input_fields(requirement):
     fields = [name for name, rest in INPUT_FIELD.findall(requirement) if "чекбокс" not in rest.lower()]
@@ -61,6 +110,157 @@ def input_fields(requirement):
         raise ValueError("В требовании нет полей в формате «- **Имя.** ...»")
     return fields
 
+
+def field_text(requirement, field):
+    match = re.search(rf"^- \*\*{re.escape(field)}\.\*\*.*(?:\n  .*)*", requirement, re.MULTILINE)
+    if not match:
+        raise ValueError(f"В требовании нет поля «{field}»")
+    return match.group(0)
+
+
+def build_rules_prompt(text, field):
+    return f"""Ты senior QA-инженер. Переведи правила поля «{field}» в структуру.
+Ничего не придумывай: если правила нет в тексте, ставь значение по умолчанию.
+
+Правила поля:
+{text}
+
+Поля структуры:
+- mandatory: true, если поле обязательно для заполнения;
+- min_length, max_length: границы длины в символах (например, «от 3 до 20» → 3 и 20); если границы нет в тексте — 0;
+- allowed: какие классы символов разрешены; если состав не ограничен — ["{ANY_CHARS}"];
+- required: классы, которые обязаны встретиться хотя бы раз («минимум одна цифра» → цифры);
+- edge_spaces: что происходит с пробелами в начале и конце значения: «обрезаются» — сказано, что их обрезают; «ошибка» — сказано, что пробелы не допускаются; «не сказано» — в тексте об этом ничего нет;
+- max_middle_spaces: сколько пробелов разрешено внутри значения; 0, если пробелы не разрешены или не упомянуты;
+- exact_symbols: символы, которые должны встретиться точное число раз («ровно один символ @» → @, 1);
+- mask: маска ввода, если она есть, иначе пустая строка."""
+
+
+def validate_rules(rules):
+    if rules["max_length"] and rules["min_length"] > rules["max_length"]:
+        raise ValueError(f"min_length {rules['min_length']} больше max_length {rules['max_length']}")
+    if not rules["allowed"]:
+        raise ValueError("пустой список allowed")
+    if ANY_CHARS not in rules["allowed"]:
+        missing = [name for name in rules["required"] if name not in rules["allowed"]]
+        if missing:
+            raise ValueError(f"обязательные классы не входят в разрешённые: {missing}")
+    for item in rules["exact_symbols"]:
+        if len(item["symbol"]) != 1:
+            raise ValueError(f"exact_symbols должен содержать один символ, получено {item['symbol']!r}")
+
+
+def extract_rules(requirement):
+    rules = {}
+    for field in input_fields(requirement):
+        prompt = build_rules_prompt(field_text(requirement, field), field)
+        rules[field] = ask_valid(prompt, RULES_SCHEMA, validate_rules, temperature=0)
+        if rules[field]["mandatory"]:
+            rules[field]["min_length"] = max(rules[field]["min_length"], 1)
+    return rules
+
+
+def describe_rules(field, rules):
+    if rules["mask"]:
+        parts = [f"маска {rules['mask']}"]
+    elif rules["min_length"] and rules["max_length"]:
+        parts = [f"длина {rules['min_length']}–{rules['max_length']} символов"]
+    elif rules["max_length"]:
+        parts = [f"длина до {rules['max_length']} символов"]
+    elif rules["min_length"]:
+        parts = [f"длина от {rules['min_length']} символов"]
+    else:
+        parts = ["длина не ограничена"]
+    parts.append("разрешены: " + ", ".join(rules["allowed"]))
+    if rules["required"]:
+        parts.append("обязательны: " + ", ".join(rules["required"]))
+    for item in rules["exact_symbols"]:
+        parts.append(f"символ {item['symbol']} ровно {item['count']} раз")
+    if rules["max_middle_spaces"]:
+        parts.append(f"пробелов внутри не больше {rules['max_middle_spaces']}")
+    else:
+        parts.append("пробелы внутри запрещены")
+    parts.append(f"пробелы по краям: {rules['edge_spaces']}")
+    return f"{field}: " + "; ".join(parts)
+
+
+def value_outcome(value, rules):
+    described = DESCRIBED_LENGTH.match(value)
+    if rules["mask"]:
+        if described:
+            return NOT_DEFINED
+        digits = re.sub(r"\D", "", value)
+        prefix = re.sub(r"\D", "", rules["mask"].split("(")[0])
+        if digits.startswith(prefix):
+            digits = digits[len(prefix):]
+        return ACCEPTED if len(digits) == rules["mask"].count(".") else REJECTED
+    if described:
+        length = int(described.group(1))
+        if not rules["max_length"] and length > max(rules["min_length"], 1):
+            return NOT_DEFINED
+        too_short = length < rules["min_length"]
+        too_long = rules["max_length"] and length > rules["max_length"]
+        return REJECTED if too_short or too_long else ACCEPTED
+    if rules["edge_spaces"] == TRIMMED:
+        value = value.strip(" ")
+    elif rules["edge_spaces"] == EDGE_ERROR and value != value.strip(" "):
+        return REJECTED
+    if len(value) < rules["min_length"] or (rules["max_length"] and len(value) > rules["max_length"]):
+        return REJECTED
+    if value.count(" ") > rules["max_middle_spaces"]:
+        return REJECTED
+    for item in rules["exact_symbols"]:
+        if value.count(item["symbol"]) != item["count"]:
+            return REJECTED
+    if ANY_CHARS not in rules["allowed"]:
+        allowed = [CHAR_CLASSES[name] for name in rules["allowed"]]
+        allowed += [re.escape(item["symbol"]) for item in rules["exact_symbols"]]
+        if rules["max_middle_spaces"]:
+            allowed.append(" ")
+        if re.sub("|".join(allowed), "", value):
+            return REJECTED
+    for name in rules["required"]:
+        if not re.search(CHAR_CLASSES[name], value):
+            return REJECTED
+    return ACCEPTED
+
+
+def stated_outcome(text):
+    # ponytail: ищем исход по ключевым словам; если модель начнёт писать иначе, расширить список
+    lowered = text.lower()
+    if "не задан" in lowered or "уточнени" in lowered:
+        return NOT_DEFINED
+    if "ошибк" in lowered or "не прин" in lowered or "не валид" in lowered:
+        return REJECTED
+    return ACCEPTED
+
+
+def corrected_outcome(value, stated_text, rules, format_only):
+    if any(security in value for security in SECURITY_VALUES.values()):
+        return None
+    computed = value_outcome(value, rules)
+    if computed == ACCEPTED and not format_only:
+        return None
+    return computed if stated_outcome(stated_text) != computed else None
+
+
+def apply_rules(case, rules, format_only):
+    fixes = 0
+    for item in case["boundary_values"]:
+        computed = corrected_outcome(item["value"], item["expected"], rules, format_only)
+        if computed:
+            item["expected"] = OUTCOME_TEXT[computed]
+            fixes += 1
+    steps = " ".join(case["steps"])
+    tested = next((item for item in case["boundary_values"] if item["value"].strip() and item["value"] in steps), None)
+    if tested is None and len(case["boundary_values"]) == 1:
+        tested = case["boundary_values"][0]
+    if tested:
+        computed = corrected_outcome(tested["value"], case["expected_result"], rules, format_only)
+        if computed:
+            case["expected_result"] = OUTCOME_TEXT[computed]
+            fixes += 1
+    return fixes
 
 def build_outline_prompt(requirement, count, existing):
     return f"""Ты senior QA-инженер.
@@ -135,6 +335,8 @@ def validate_case(case, check=None):
             raise ValueError("пустой expected в boundary_values")
     if FOREIGN_CHARS.search(json.dumps(case, ensure_ascii=False)):
         raise ValueError("в тексте есть символы другого языка")
+    if check == "длина" and any(re.fullmatch(r"\d{1,3}", item["value"]) for item in case["boundary_values"]):
+        raise ValueError("длину значения пиши описанием «строка из N символов», а не числом")
     if check in SECURITY_VALUES and not any(SECURITY_VALUES[check] in step for step in case["steps"]):
         raise ValueError(f"в шагах нет значения {SECURITY_VALUES[check]}")
 
@@ -170,6 +372,8 @@ def check_review(requirement):
     review = json.loads(REVIEW_PATH.read_text(encoding="utf-8"))
     if review.get("requirement_sha256") != fingerprint(requirement):
         raise SystemExit(f"Требование изменилось после проверки. Запусти: {REVIEW_COMMAND}")
+    if "field_rules" not in review:
+        raise SystemExit(f"В ревью нет подтверждённых правил полей. Запусти: {REVIEW_COMMAND}")
     return review
 
 
@@ -184,7 +388,7 @@ def suite_coverage(cases, requirement):
     }
 
 
-def generate_cases(requirement, free_count=6):
+def generate_cases(requirement, field_rules, free_count=6):
     plan = [
         (field, check, f"{field}: {description}")
         for field in input_fields(requirement)
@@ -219,7 +423,11 @@ def generate_cases(requirement, free_count=6):
                 item["expected"] = SECURITY_EXPECTED
             else:
                 item["expected"] = remove_invented_quotes(item["expected"], requirement)
-        cases.append({"id": f"TC-{len(cases) + 1:03d}", "field": field, "check": check, **case})
+        rules = field_rules.get(field or title.split(":")[0].strip())
+        fixes = apply_rules(case, rules, format_only=check is not None) if rules else 0
+        if fixes:
+            print(f"  исправлено по правилам поля: {fixes}")
+        cases.append({"id": f"TC-{len(cases) + 1:03d}", "field": field, "check": check, "rule_fixes": fixes, **case})
     return cases
 
 
@@ -228,7 +436,7 @@ if __name__ == "__main__":
     review = check_review(requirement)
     print(f"Требование проверено: {review['status']}, принятых рисков {len(review['accepted_risks'])}")
     prepare_ollama()
-    cases = generate_cases(requirement)
+    cases = generate_cases(requirement, review["field_rules"])
     OUTPUT_PATH.parent.mkdir(exist_ok=True)
     OUTPUT_PATH.write_text(json.dumps(cases, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Сохранено кейсов: {len(cases)} → {OUTPUT_PATH}")

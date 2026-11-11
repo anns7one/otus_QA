@@ -2,7 +2,7 @@ import argparse
 import json
 import re
 from datetime import datetime
-from generate_cases import INPUT_FIELD, REVIEW_PATH, ask_valid, fingerprint
+from generate_cases import INPUT_FIELD, REVIEW_PATH, ask_valid, describe_rules, extract_rules, fingerprint
 from ollama_client import PROJECT_DIR, prepare_ollama
 
 GOLDEN_DIR = PROJECT_DIR / "data" / "analyzer_golden"
@@ -11,7 +11,8 @@ OUTPUT_DIR = PROJECT_DIR / "output"
 PROGRESS_PATH = OUTPUT_DIR / "analyzer_progress.jsonl"
 CURRENT_PROMPT = "v1"
 SECURITY_DEFECT_IDS = {"security", "malicious-file"}
-ACCEPT_COMMAND = "принять"
+ACCEPT_COMMANDS = ("принять", "нет")
+CONFIRM_YES = "да"
 CHECK_TITLES = {
     "general": "Общий анализ",
     "vague": "Размытые формулировки",
@@ -314,9 +315,27 @@ def print_findings(findings):
         print(f"   Вопрос: {finding['question']}")
 
 
-def save_review(status, findings, requirement):
+def confirm_rules(requirement):
+    print("\nРазбираю правила полей (около 4 секунд на поле)...")
+    rules = extract_rules(requirement)
+    print("Правила полей, которые будут использованы при генерации:")
+    for field, field_rules in rules.items():
+        print(f"- {describe_rules(field, field_rules)}")
+    answer = input(f"\nПравила верны? ({CONFIRM_YES} / нет): ").strip().lower()
+    if answer != CONFIRM_YES:
+        print("Ревью не сохранено. Уточни формулировки полей в требовании и запусти ревью заново.")
+        return None
+    return rules
+
+
+def save_review(status, findings, requirement, rules):
     OUTPUT_DIR.mkdir(exist_ok=True)
-    review = {"status": status, "requirement_sha256": fingerprint(requirement), "accepted_risks": findings}
+    review = {
+        "status": status,
+        "requirement_sha256": fingerprint(requirement),
+        "accepted_risks": findings,
+        "field_rules": rules,
+    }
     REVIEW_PATH.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Статус требования: {status} → {REVIEW_PATH}")
 
@@ -325,20 +344,28 @@ def review():
     prepare_ollama()
     while True:
         requirement = REQUIREMENT_PATH.read_text(encoding="utf-8")
+        print("\nАнализирую требование (1–2 минуты)...")
         findings, _, _ = analyze(requirement)
-        if not findings:
-            save_review("passed", [], requirement)
+        if findings:
+            findings = sort_findings(findings, requirement)
+            print_findings(findings)
+            answer = ask_next_step()
+        if not findings or answer in ACCEPT_COMMANDS:
+            rules = confirm_rules(requirement)
+            if rules is not None:
+                save_review("accepted_risks" if findings else "passed", findings, requirement, rules)
             return
-        findings = sort_findings(findings, requirement)
-        print_findings(findings)
 
-        answer = input(f"\nВведите уточнение к требованию или «{ACCEPT_COMMAND}», чтобы принять риски: ").strip()
-        if answer.lower() == ACCEPT_COMMAND:
-            save_review("accepted_risks", findings, requirement)
-            return
-        if answer:
-            with REQUIREMENT_PATH.open("a", encoding="utf-8") as file:
-                file.write(f"\n- Уточнение: {answer}\n")
+
+def ask_next_step():
+    while True:
+        answer = input(
+            f"\nИсправь поля в {REQUIREMENT_PATH.name} и нажми Enter, чтобы проверить заново, "
+            "или введи «принять» / «нет», чтобы принять риски: "
+        ).strip().lower()
+        if not answer or answer in ACCEPT_COMMANDS:
+            return answer
+        print("Уточнения пиши прямо в поля требования, здесь только Enter или «принять» / «нет».")
 
 
 if __name__ == "__main__":
