@@ -37,7 +37,7 @@ main.py build-dataset → build_dataset.py   Ollama генерирует дат�
 | `input/requirement.md` | Требование, которое тестируем (форма регистрации) | 1 | `analyze_requirement.py review`, `main.py run` | По нему генерируются кейсы и строится отчёт |
 | `data/train_requirements.json` + `data/train_scenarios.jsonl` | Учебные требования и сценарии | 24 и 156 | `build_dataset.py`, `quality_model.py` | На них учится модель качества. Одного требования мало: модель запомнила бы форму, а не научилась отличать хороший кейс от плохого |
 | `data/analyzer_golden/REQ-*.md` + `defects.json` | Эталонные требования с известными дефектами | 9 | `analyze_requirement.py evaluate` | Ключ ответов для замера recall анализатора |
-| `data/gold.jsonl` | Независимая разметка 40 учебных сценариев | 40 на разметчика | `quality_model.py` | Проверка, насколько верны метки учебных сценариев |
+| `data/gold.jsonl` | Независимая разметка 40 учебных сценариев | 40 (Claude, llama), 15 (anna) | `quality_model.py` | Проверка, насколько верны метки учебных сценариев |
 
 ## Метрики качества сценария
 
