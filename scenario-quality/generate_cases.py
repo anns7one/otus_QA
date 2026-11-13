@@ -50,7 +50,7 @@ OUTCOME_TEXT = {
     NOT_DEFINED: UNDEFINED,
 }
 DESCRIBED_LENGTH = re.compile(r"^строка из (\d+) символ")
-REJECTION_STEMS = ["ошибк", "не прин", "не валид", "невалид", "отклон", "неактив", "не проход"]
+REJECTION_STEMS = ["ошибк", "не прин", "не валид", "невалид", "отклон", "неактив", "не проход", "некоррект", "неверн", "недопуст", "введите", "укажите"]
 
 STRING_LIST = {"type": "array", "items": {"type": "string"}}
 FORM = "форма"

@@ -61,9 +61,9 @@ def ensure_model(model=MODEL):
                 print(last_status)
 
 
-def chat(prompt, schema=None, temperature=0.2, seed=42):
+def chat(prompt, schema=None, temperature=0.2, seed=42, model=MODEL):
     payload = {
-        "model": MODEL,
+        "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "options": {"temperature": temperature, "seed": seed, "num_predict": MAX_TOKENS},

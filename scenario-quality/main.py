@@ -32,10 +32,18 @@ if __name__ == "__main__":
     run_parser = commands.add_parser("run", help="сгенерировать кейсы, обучить модель, построить отчёт")
     run_parser.add_argument("--reuse-cases", action="store_true", help="не генерировать кейсы, взять output/test_cases.json")
     commands.add_parser("build-dataset", help="сгенерировать датасет для обучения модели (долго)")
+    commands.add_parser("label-gold", help="вручную разметить 40 сценариев датасета для проверки меток")
+    judge_parser = commands.add_parser("judge-gold", help="разметить те же 40 сценариев другой моделью Ollama")
+    judge_parser.add_argument("--model", default="llama3.1:8b", help="модель-разметчик, по умолчанию llama3.1:8b")
     args = parser.parse_args()
     if args.command == "run":
         run(args.reuse_cases)
     else:
         import build_dataset
 
-        build_dataset.main()
+        if args.command == "label-gold":
+            build_dataset.label_gold()
+        elif args.command == "judge-gold":
+            build_dataset.judge_gold(args.model)
+        else:
+            build_dataset.main()

@@ -5,11 +5,11 @@ import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import f1_score, roc_auc_score
+from sklearn.metrics import cohen_kappa_score, f1_score, roc_auc_score
 from sklearn.model_selection import GroupKFold
 from torch import nn
 
-from build_dataset import METRICS, REQUIREMENTS_PATH, SCENARIOS_PATH, load_jsonl
+from build_dataset import GOLD_PATH, METRICS, TRAIN_REQUIREMENTS_PATH, TRAIN_SCENARIOS_PATH, load_jsonl
 from ollama_client import PROJECT_DIR
 
 ENCODER_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -152,19 +152,22 @@ def fit_and_score(x, y, scenarios, fit, val, test):
         "model": scores(y[test].numpy(), probabilities, threshold),
         **baselines([scenarios[i] for i in fit], [scenarios[i] for i in test], y[fit], y[test], threshold),
     }
-    return net, history, threshold, result
+    return net, history, threshold, result, probabilities
 
 
 def cross_validate(x, y, scenarios, folds=CV_FOLDS):
     groups = [item["requirement_id"] for item in scenarios]
     runs = []
+    out_of_fold = np.zeros((len(scenarios), len(METRICS)))
     for fold, (train_index, test_index) in enumerate(GroupKFold(n_splits=folds).split(x, groups=groups), start=1):
         train_ids = sorted({groups[i] for i in train_index})
         random.Random(SEED + fold).shuffle(train_ids)
         val_ids = set(train_ids[:max(1, round(len(train_ids) * SPLIT[1]))])
         fit = [i for i in train_index if groups[i] not in val_ids]
         val = [i for i in train_index if groups[i] in val_ids]
-        runs.append(fit_and_score(x, y, scenarios, fit, val, list(test_index))[3])
+        *_, result, probabilities = fit_and_score(x, y, scenarios, fit, val, list(test_index))
+        runs.append(result)
+        out_of_fold[test_index] = probabilities
     summary = {}
     for name in runs[0]:
         summary[name] = {}
@@ -175,32 +178,98 @@ def cross_validate(x, y, scenarios, folds=CV_FOLDS):
                 "roc_auc_mean": float(np.mean(aucs)), "roc_auc_std": float(np.std(aucs)),
                 "macro_f1_mean": float(np.mean(f1s)), "macro_f1_std": float(np.std(f1s)),
             }
-    return summary
+    return summary, out_of_fold
+
+
+def kappa(first, second):
+    return float(cohen_kappa_score(first, second)) if len(set(first + second)) > 1 else None
+
+
+def annotator_agreement(scenarios, out_of_fold, rows):
+    position = {(item["requirement_id"], item["slot"]): index for index, item in enumerate(scenarios)}
+    rows = [(position[(row["requirement_id"], row["slot"])], row["labels"]) for row in rows
+            if (row["requirement_id"], row["slot"]) in position]
+    result = {"count": len(rows), "metrics": {}}
+    for column, metric in enumerate(METRICS):
+        judged = [labels[metric] for _, labels in rows]
+        generated = [scenarios[index]["labels"][metric] for index, _ in rows]
+        predicted = [out_of_fold[index, column] for index, _ in rows]
+        result["metrics"][metric] = {
+            "agreement": float(np.mean([a == b for a, b in zip(judged, generated)])),
+            "kappa": kappa(judged, generated),
+            "model_roc_auc": float(roc_auc_score(judged, predicted)) if len(set(judged)) > 1 else None,
+        }
+    return result
+
+
+def pairwise_agreement(by_annotator):
+    result = {}
+    names = sorted(by_annotator)
+    for i, first in enumerate(names):
+        for second in names[i + 1:]:
+            common = sorted(set(by_annotator[first]) & set(by_annotator[second]))
+            if not common:
+                continue
+            result[f"{first} vs {second}"] = {"count": len(common), **{
+                metric: kappa([by_annotator[first][key][metric] for key in common],
+                              [by_annotator[second][key][metric] for key in common])
+                for metric in METRICS
+            }}
+    return result
+
+
+def gold_agreement(scenarios, out_of_fold, gold):
+    if not gold:
+        return None
+    by_annotator = {}
+    for row in gold:
+        by_annotator.setdefault(row["annotator"], {})[(row["requirement_id"], row["slot"])] = row["labels"]
+    return {
+        "annotators": {
+            name: annotator_agreement(scenarios, out_of_fold, [row for row in gold if row["annotator"] == name])
+            for name in sorted(by_annotator)
+        },
+        "pairwise": pairwise_agreement(by_annotator),
+    }
+
+
+def print_gold(gold):
+    print("Сравнение с независимой разметкой:")
+    for name, result in gold["annotators"].items():
+        print(f"  {name} ({result['count']} сценариев):")
+        for metric, value in result["metrics"].items():
+            print(f"    {metric}: совпадение {value['agreement']:.0%}, каппа {value['kappa']}, ROC-AUC модели {value['model_roc_auc']}")
+    for pair, value in gold["pairwise"].items():
+        print(f"  {pair} ({value['count']} общих): " + ", ".join(f"{metric} {value[metric]}" for metric in METRICS))
 
 
 def train():
-    scenarios = load_jsonl(SCENARIOS_PATH)
-    requirement_texts = {item["id"]: item["text"] for item in json.loads(REQUIREMENTS_PATH.read_text(encoding="utf-8"))}
+    scenarios = load_jsonl(TRAIN_SCENARIOS_PATH)
+    requirement_texts = {item["id"]: item["text"] for item in json.loads(TRAIN_REQUIREMENTS_PATH.read_text(encoding="utf-8"))}
     x, y = dataset(scenarios, requirement_texts)
     position = {id(item): index for index, item in enumerate(scenarios)}
     parts = {name: [position[id(item)] for item in items] for name, items in split_by_requirement(scenarios).items()}
     print({name: len(index) for name, index in parts.items()})
-    net, history, threshold, test = fit_and_score(x, y, scenarios, parts["train"], parts["val"], parts["test"])
+    net, history, threshold, test, _ = fit_and_score(x, y, scenarios, parts["train"], parts["val"], parts["test"])
     print(f"Порог, подобранный на validation: {threshold:.2f}")
     print(f"Кросс-валидация по требованиям, {CV_FOLDS} разбиений:")
-    cross_validation = cross_validate(x, y, scenarios)
+    cross_validation, out_of_fold = cross_validate(x, y, scenarios)
+    gold = gold_agreement(scenarios, out_of_fold, load_jsonl(GOLD_PATH))
     report = {
         "split": {name: sorted({scenarios[i]["requirement_id"] for i in index}) for name, index in parts.items()},
         "threshold": threshold,
         "history": history,
         "test": test,
         "cross_validation": cross_validation,
+        "gold": gold,
     }
     MODEL_PATH.parent.mkdir(exist_ok=True)
     torch.save({"state": net.state_dict(), "size": x.shape[1], "threshold": threshold}, MODEL_PATH)
     TRAINING_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     for name, result in cross_validation.items():
         print(name, {metric: f"{value['roc_auc_mean']:.2f}±{value['roc_auc_std']:.2f}" for metric, value in result.items()})
+    if gold:
+        print_gold(gold)
     return net, report
 
 

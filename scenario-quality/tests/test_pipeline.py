@@ -1,13 +1,14 @@
 import sys
 from pathlib import Path
 
+import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import report
 from generate_cases import ACCEPTED, NOT_DEFINED, REJECTED, apply_rules, check_review, stated_outcome, value_outcome
-from quality_model import QualityNet, split_by_requirement
+from quality_model import QualityNet, gold_agreement, split_by_requirement
 
 NAME = {"mandatory": True, "min_length": 1, "max_length": 50, "allowed": ["кириллица", "латиница строчная", "латиница заглавная", "дефис"],
         "required": [], "edge_spaces": "обрезаются", "max_middle_spaces": 1, "exact_symbols": [], "mask": ""}
@@ -66,6 +67,25 @@ def test_split_by_requirement_has_no_leak():
     ids = {name: {item["requirement_id"] for item in items} for name, items in parts.items()}
     assert not ids["train"] & ids["val"] and not ids["train"] & ids["test"] and not ids["val"] & ids["test"]
     assert sum(len(items) for items in parts.values()) == len(scenarios)
+
+
+def test_gold_agreement_compares_annotators():
+    labels = lambda *values: dict(zip(["readability", "goal_clarity", "coverage", "consistency"], values))
+    scenarios = [{"requirement_id": "DS-01", "slot": slot, "labels": labels(*([slot % 2] * 4))} for slot in range(4)]
+    out_of_fold = np.array([[0.1] * 4, [0.9] * 4, [0.2] * 4, [0.8] * 4])
+    gold = [{"requirement_id": "DS-01", "slot": slot, "annotator": "anna", "labels": labels(*([slot % 2] * 3 + [1]))}
+            for slot in range(4)]
+    gold += [{"requirement_id": "DS-01", "slot": slot, "annotator": "llama", "labels": labels(*([slot % 2] * 4))}
+             for slot in range(2)]
+    result = gold_agreement(scenarios, out_of_fold, gold)
+    anna = result["annotators"]["anna"]
+    assert anna["count"] == 4
+    assert anna["metrics"]["readability"] == {"agreement": 1.0, "kappa": 1.0, "model_roc_auc": 1.0}
+    assert anna["metrics"]["consistency"]["agreement"] == 0.5
+    assert anna["metrics"]["consistency"]["model_roc_auc"] is None
+    assert result["pairwise"]["anna vs llama"]["count"] == 2
+    assert result["pairwise"]["anna vs llama"]["readability"] == 1.0
+    assert gold_agreement(scenarios, out_of_fold, []) is None
 
 
 def test_net_can_overfit_small_batch():
